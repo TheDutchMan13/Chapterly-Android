@@ -7,6 +7,7 @@ import '../data/collections.dart';
 import '../data/file_io.dart';
 import '../data/open_library_client.dart';
 import '../data/phone_sync.dart';
+import '../data/rating_text.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
@@ -52,6 +53,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _searchController = TextEditingController();
   bool _searching = false;
   bool _favoritesOnly = false;
+  final Set<String> _excludedTags = {};
+  bool _matchAllTags = true;
+  int? _finishYear;
 
   @override
   void dispose() {
@@ -61,6 +65,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   bool get _filtering =>
       _selectedTags.isNotEmpty ||
+      _excludedTags.isNotEmpty ||
+      _finishYear != null ||
       _formats.isNotEmpty ||
       _favoritesOnly ||
       _searchController.text.trim().isNotEmpty;
@@ -252,10 +258,123 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _toggleTag(String tag) {
+  /// Tapping a tag cycles it: off, shown, hidden, off.
+  void _cycleTag(String tag) {
     setState(() {
-      if (!_selectedTags.add(tag)) _selectedTags.remove(tag);
+      if (_selectedTags.remove(tag)) {
+        _excludedTags.add(tag);
+      } else if (!_excludedTags.remove(tag)) {
+        _selectedTags.add(tag);
+      }
     });
+  }
+
+  Future<void> _chooseFinishYear() async {
+    final years = widget.repository.finishedYears;
+    final choice = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Finished in'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(0),
+            child: const Text('Any year'),
+          ),
+          for (final year in years)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(year),
+              child: Text('$year'),
+            ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _finishYear = choice == 0 ? null : choice);
+  }
+
+  Future<void> _changeFormatSelected() async {
+    final choice = await showDialog<List<BookFormat?>>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Change format'),
+        children: [
+          for (final format in BookFormat.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop([format]),
+              child: Text(format.label),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop([null]),
+            child: const Text('Not set'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final ids = {..._selected};
+    final before = [
+      for (final id in ids) ?widget.repository.byId(id),
+    ];
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.repository.setFormatAll(ids, choice.first);
+    if (!mounted) return;
+    setState(_selected.clear);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Changed the format of ${ids.length} '
+            'book${ids.length == 1 ? '' : 's'}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => widget.repository.putBack(before),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changeAuthorSelected() async {
+    final controller = TextEditingController();
+    final author = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change author'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Author'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (author == null || author.trim().isEmpty || !mounted) return;
+    final ids = {..._selected};
+    final before = [
+      for (final id in ids) ?widget.repository.byId(id),
+    ];
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.repository.setAuthorAll(ids, author);
+    if (!mounted) return;
+    setState(_selected.clear);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Changed the author of ${ids.length} '
+            'book${ids.length == 1 ? '' : 's'}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => widget.repository.putBack(before),
+        ),
+      ),
+    );
   }
 
   void _openBook(Book book) {
@@ -330,6 +449,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             builder: (_) => SearchScreen(
               repository: widget.repository,
               client: widget.client,
+              settings: widget.settings,
             ),
           ),
         );
@@ -347,7 +467,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _addManually({String? isbn}) async {
-    final data = await showAddBookDialog(context, isbn: isbn);
+    final data = await showAddBookDialog(
+      context,
+      isbn: isbn,
+      initialShelf: widget.settings.defaultShelf ?? Shelf.forLater,
+      initialFormat: widget.settings.defaultFormat,
+      initialTags: widget.settings.defaultTags,
+    );
     if (data == null) return;
     await widget.repository.add(
       title: data.title,
@@ -388,12 +514,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return;
     }
 
-    final shelf = await showShelfPicker(context);
+    final shelf = await chooseShelfForNewBook(context, widget.settings);
     if (shelf == null || !mounted) return;
     await widget.repository.add(
       title: found.title,
       author: found.author,
       shelf: shelf,
+      tags: widget.settings.defaultTags,
+      format: widget.settings.defaultFormat,
       isbn: scanned.isbn,
       coverUrl: found.coverUrl,
       firstPublishYear: found.firstPublishYear,
@@ -418,6 +546,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             _selected.isEmpty ? _openBook(book) : _toggleSelected(book),
         onSelect: _toggleSelected,
         onMove: widget.repository.moveTo,
+        showFormat: widget.settings.showFormatOnCards,
+        showTags: widget.settings.showTagsOnCards,
+        ratingAsNumber: widget.settings.ratingAsNumber,
       );
 
   List<String> get _collections =>
@@ -457,6 +588,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
             tooltip: 'Move to trash',
             icon: const Icon(Icons.delete_outline),
             onPressed: _trashSelected,
+          ),
+          PopupMenuButton<VoidCallback>(
+            tooltip: 'More',
+            onSelected: (action) => action(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: _changeFormatSelected,
+                child: const Text('Change format'),
+              ),
+              PopupMenuItem(
+                value: _changeAuthorSelected,
+                child: const Text('Change author'),
+              ),
+            ],
           ),
         ],
         bottom: tabBar,
@@ -575,7 +720,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               TabBar(
                 isScrollable: true,
                 tabs: [
-                  for (final shelf in Shelf.values)
+                  for (final shelf in widget.settings.shelfOrder)
                     Tab(
                       text: '${shelf.label} '
                           '(${widget.repository.booksOn(shelf).length})',
@@ -598,6 +743,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 // Forget filters for tags that no longer exist on any book,
                 // and selections for books that are gone.
                 _selectedTags.retainAll(allTags);
+                _excludedTags.retainAll(allTags);
                 _selected.retainAll({
                   for (final book in widget.repository.books) book.id,
                 });
@@ -637,22 +783,58 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             selected: _formats.contains(format),
                             onSelected: (_) => _toggleFormat(format),
                           ),
+                        if (widget.repository.finishedYears.isNotEmpty)
+                          FilterChip(
+                            label: Text(
+                              _finishYear == null
+                                  ? 'Year finished'
+                                  : 'Finished $_finishYear',
+                            ),
+                            selected: _finishYear != null,
+                            onSelected: (_) => _chooseFinishYear(),
+                          ),
+                        if (_selectedTags.length > 1)
+                          ActionChip(
+                            label: Text(
+                              _matchAllTags
+                                  ? 'Match all tags'
+                                  : 'Match any tag',
+                            ),
+                            onPressed: () =>
+                                setState(() => _matchAllTags = !_matchAllTags),
+                          ),
                         for (final tag in allTags)
                           FilterChip(
-                            label: Text(tag),
-                            selected: _selectedTags.contains(tag),
-                            onSelected: (_) => _toggleTag(tag),
+                            tooltip: 'Tap to show these books, '
+                                'tap again to hide them',
+                            avatar: _excludedTags.contains(tag)
+                                ? const Icon(Icons.block, size: 18)
+                                : null,
+                            label: Text(
+                              tag,
+                              style: _excludedTags.contains(tag)
+                                  ? const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                    )
+                                  : null,
+                            ),
+                            selected: _selectedTags.contains(tag) ||
+                                _excludedTags.contains(tag),
+                            onSelected: (_) => _cycleTag(tag),
                           ),
                       ],
                     ),
                     Expanded(
                       child: TabBarView(
                         children: [
-                          for (final shelf in Shelf.values)
+                          for (final shelf in widget.settings.shelfOrder)
                             _list(
                               widget.repository.booksOn(
                                 shelf,
                                 tags: _selectedTags,
+                                matchAllTags: _matchAllTags,
+                                excludedTags: _excludedTags,
+                                finishYear: _finishYear,
                                 query: _searchController.text,
                                 favoritesOnly: _favoritesOnly,
                                 formats: _formats,
@@ -663,6 +845,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               widget.repository.booksInCollection(
                                 name,
                                 tags: _selectedTags,
+                                matchAllTags: _matchAllTags,
+                                excludedTags: _excludedTags,
+                                finishYear: _finishYear,
                                 query: _searchController.text,
                                 favoritesOnly: _favoritesOnly,
                                 formats: _formats,
@@ -718,6 +903,9 @@ class _ShelfList extends StatelessWidget {
     required this.onOpen,
     required this.onSelect,
     required this.onMove,
+    required this.showFormat,
+    required this.showTags,
+    required this.ratingAsNumber,
   });
 
   final List<Book> books;
@@ -727,16 +915,21 @@ class _ShelfList extends StatelessWidget {
   final void Function(Book book) onOpen;
   final void Function(Book book) onSelect;
   final void Function(String id, Shelf shelf) onMove;
+  final bool showFormat;
+  final bool showTags;
+  final bool ratingAsNumber;
 
   List<String> _subtitleLines(Book book) {
+    final format = book.format;
+    final rating = book.rating;
     final first = [
       if (book.author.isNotEmpty) book.author,
-      if (book.format != null) book.format!.label,
-      if (book.rating != null) '★ ${book.rating}',
+      if (showFormat && format != null) format.label,
+      if (rating != null) ratingText(rating, asNumber: ratingAsNumber),
     ].join(' · ');
     return [
       if (first.isNotEmpty) first,
-      if (book.tags.isNotEmpty) book.tags.join(' · '),
+      if (showTags && book.tags.isNotEmpty) book.tags.join(' · '),
     ];
   }
 
@@ -783,7 +976,6 @@ class _ShelfList extends StatelessWidget {
                     children: [
                       BookCover(
                         coverUrl: book.coverUrl,
-                        coverPath: book.coverPath,
                         width: 110,
                         height: 160,
                       ),
@@ -824,7 +1016,6 @@ class _ShelfList extends StatelessWidget {
           selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
           leading: BookCover(
             coverUrl: book.coverUrl,
-            coverPath: book.coverPath,
           ),
           title: Text(book.title),
           subtitle: lines.isEmpty ? null : Text(lines.join('\n')),

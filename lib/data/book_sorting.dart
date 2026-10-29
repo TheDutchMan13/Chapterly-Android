@@ -37,6 +37,10 @@ List<Book> sortBooks(
         SortField.pages => _compareOptional(a.pages, b.pages, ascending),
         SortField.dateFinished =>
           _compareOptional(a.finishedAt, b.finishedAt, ascending),
+        SortField.publicationYear => _compareOptional(
+            a.firstPublishYear, b.firstPublishYear, ascending),
+        SortField.dateModified =>
+          _direction(a.updatedAt.compareTo(b.updatedAt), ascending),
         SortField.format =>
           _compareOptional(a.format?.index, b.format?.index, ascending),
         SortField.favorite => _direction(

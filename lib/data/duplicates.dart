@@ -60,7 +60,7 @@ int _score(Book book) {
   if (book.rating != null) score++;
   if (book.pages != null) score++;
   if (book.isbn != null) score++;
-  if (book.coverUrl != null || book.coverPath != null) score++;
+  if (book.coverUrl != null) score++;
   if (book.startedAt != null) score++;
   if (book.finishedAt != null) score++;
   if ((book.notes ?? '').isNotEmpty) score++;
@@ -126,9 +126,6 @@ Book _absorb(Book base, Book other) {
     isbn: base.isbn == null && other.isbn != null ? () => other.isbn : null,
     coverUrl: base.coverUrl == null && other.coverUrl != null
         ? () => other.coverUrl
-        : null,
-    coverPath: base.coverPath == null && other.coverPath != null
-        ? () => other.coverPath
         : null,
     firstPublishYear:
         base.firstPublishYear == null && other.firstPublishYear != null

@@ -183,13 +183,11 @@ void main() {
       format: BookFormat.hardcover,
       favorite: true,
       notes: 'n',
-      coverPath: '/x/y.img',
       deletedAt: DateTime(2026, 2),
     );
     final copy = Book.fromMap(book.toMap());
     expect(copy.format, BookFormat.hardcover);
     expect(copy.favorite, isTrue);
-    expect(copy.coverPath, '/x/y.img');
     expect(copy.deletedAt, DateTime(2026, 2));
   });
 

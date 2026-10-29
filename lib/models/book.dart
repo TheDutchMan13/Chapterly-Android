@@ -47,7 +47,6 @@ class Book {
     this.favorite = false,
     this.notes,
     this.deletedAt,
-    this.coverPath,
     this.series,
     this.seriesNumber,
     this.readingLog = const [],
@@ -77,9 +76,6 @@ class Book {
 
   /// Set when the book is in the trash.
   final DateTime? deletedAt;
-
-  /// A cover picked from the phone. Wins over [coverUrl] when set.
-  final String? coverPath;
 
   /// The series this book belongs to, and its place in it (1, 2, 3...).
   final String? series;
@@ -117,6 +113,7 @@ class Book {
   /// Fields that can be cleared take a function so that `() => null` means
   /// "clear it" while leaving the argument out means "keep it".
   Book copyWith({
+    String? author,
     Shelf? shelf,
     List<String>? tags,
     bool? favorite,
@@ -129,7 +126,6 @@ class Book {
     int? Function()? firstPublishYear,
     BookFormat? Function()? format,
     String? Function()? notes,
-    String? Function()? coverPath,
     String? Function()? series,
     int? Function()? seriesNumber,
     DateTime? Function()? deletedAt,
@@ -142,7 +138,7 @@ class Book {
       Book(
         id: id,
         title: title,
-        author: author,
+        author: author ?? this.author,
         shelf: shelf ?? this.shelf,
         addedAt: addedAt,
         tags: tags ?? this.tags,
@@ -159,7 +155,6 @@ class Book {
         favorite: favorite ?? this.favorite,
         notes: notes != null ? notes() : this.notes,
         deletedAt: deletedAt != null ? deletedAt() : this.deletedAt,
-        coverPath: coverPath != null ? coverPath() : this.coverPath,
         series: series != null ? series() : this.series,
         seriesNumber:
             seriesNumber != null ? seriesNumber() : this.seriesNumber,
@@ -189,7 +184,6 @@ class Book {
         'favorite': favorite ? 1 : 0,
         'notes': notes,
         'deleted_at': deletedAt?.millisecondsSinceEpoch,
-        'cover_path': coverPath,
         'series': series,
         'series_number': seriesNumber,
         'reading_log': jsonEncode([for (final e in readingLog) e.toJson()]),
@@ -218,7 +212,6 @@ class Book {
         favorite: map['favorite'] == 1,
         notes: map['notes'] as String?,
         deletedAt: _dateFromMillis(map['deleted_at']),
-        coverPath: map['cover_path'] as String?,
         series: map['series'] as String?,
         seriesNumber: map['series_number'] as int?,
         readingLog: logEntriesFromJson(_decode(map['reading_log'])),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/book_format.dart';
+import '../models/shelf.dart';
 import 'pin_lock.dart';
 
 enum SortField {
@@ -10,6 +12,8 @@ enum SortField {
   rating,
   pages,
   dateFinished,
+  publicationYear,
+  dateModified,
   format,
   favorite,
 }
@@ -22,6 +26,8 @@ extension SortFieldLabel on SortField {
         SortField.rating => 'Rating',
         SortField.pages => 'Pages',
         SortField.dateFinished => 'Date finished',
+        SortField.publicationYear => 'Publication year',
+        SortField.dateModified => 'Date modified',
         SortField.format => 'Format',
         SortField.favorite => 'Favorites first',
       };
@@ -65,6 +71,14 @@ class AppSettings extends ChangeNotifier {
   DateTime? _backupSnoozed;
   DateTime? _reminderSince;
   final Map<int, int> _goals = {};
+  final Map<int, int> _pageGoals = {};
+  Shelf? _defaultShelf;
+  BookFormat? _defaultFormat;
+  List<String> _defaultTags = [];
+  bool _ratingAsNumber = false;
+  bool _showFormatOnCards = true;
+  bool _showTagsOnCards = true;
+  List<Shelf> _shelfOrder = List.of(Shelf.values);
 
   SortField get sortField => _sortField;
   bool get ascending => _ascending;
@@ -108,6 +122,24 @@ class AppSettings extends ChangeNotifier {
   /// The names of your own shelves, including ones with no books yet.
   List<String> get collections => List.unmodifiable(_collections);
 
+  /// The shelf new books go on, or null to ask every time.
+  Shelf? get defaultShelf => _defaultShelf;
+
+  /// The format given to new books, or null for "not set".
+  BookFormat? get defaultFormat => _defaultFormat;
+
+  /// Tags given to every new book.
+  List<String> get defaultTags => List.unmodifiable(_defaultTags);
+
+  /// Show ratings as a number (4/5) instead of stars.
+  bool get ratingAsNumber => _ratingAsNumber;
+
+  bool get showFormatOnCards => _showFormatOnCards;
+  bool get showTagsOnCards => _showTagsOnCards;
+
+  /// The four main shelves in the order their tabs are shown.
+  List<Shelf> get shelfOrder => List.unmodifiable(_shelfOrder);
+
   /// Whether a PIN is needed to open the app.
   bool get pinEnabled => _pinHash != null;
 
@@ -142,6 +174,18 @@ class AppSettings extends ChangeNotifier {
     settings._pinHash = prefs.getString('pinHash');
     settings._pinSalt = prefs.getString('pinSalt');
     settings._lockAfterSeconds = prefs.getInt('lockAfterSeconds') ?? 30;
+    settings._defaultShelf =
+        Shelf.values.asNameMap()[prefs.getString('defaultShelf')];
+    settings._defaultFormat =
+        BookFormat.values.asNameMap()[prefs.getString('defaultFormat')];
+    settings._defaultTags = prefs.getStringList('defaultTags') ?? [];
+    settings._ratingAsNumber = prefs.getBool('ratingAsNumber') ?? false;
+    settings._showFormatOnCards = prefs.getBool('showFormatOnCards') ?? true;
+    settings._showTagsOnCards = prefs.getBool('showTagsOnCards') ?? true;
+    settings._shelfOrder = _cleanShelfOrder([
+      for (final name in prefs.getStringList('shelfOrder') ?? <String>[])
+        ?Shelf.values.asNameMap()[name],
+    ]);
     settings._lastBackup = _fromMillis(prefs.getInt('lastBackup'));
     settings._backupSnoozed = _fromMillis(prefs.getInt('backupSnoozed'));
     settings._reminderSince = _fromMillis(prefs.getInt('backupSince'));
@@ -151,7 +195,75 @@ class AppSettings extends ChangeNotifier {
       final goal = prefs.getInt(key);
       if (year != null && goal != null) settings._goals[year] = goal;
     }
+    for (final key in prefs.getKeys()) {
+      if (!key.startsWith('pagesgoal_')) continue;
+      final year = int.tryParse(key.substring(10));
+      final goal = prefs.getInt(key);
+      if (year != null && goal != null) settings._pageGoals[year] = goal;
+    }
     return settings;
+  }
+
+  /// Removes repeats and adds any shelf that is missing, keeping the order.
+  static List<Shelf> _cleanShelfOrder(List<Shelf> order) {
+    final result = <Shelf>[];
+    for (final shelf in [...order, ...Shelf.values]) {
+      if (!result.contains(shelf)) result.add(shelf);
+    }
+    return result;
+  }
+
+  /// Pass null to ask which shelf every time.
+  void setDefaultShelf(Shelf? shelf) {
+    _defaultShelf = shelf;
+    if (shelf == null) {
+      prefs?.remove('defaultShelf');
+    } else {
+      prefs?.setString('defaultShelf', shelf.name);
+    }
+    notifyListeners();
+  }
+
+  void setDefaultFormat(BookFormat? format) {
+    _defaultFormat = format;
+    if (format == null) {
+      prefs?.remove('defaultFormat');
+    } else {
+      prefs?.setString('defaultFormat', format.name);
+    }
+    notifyListeners();
+  }
+
+  void setDefaultTags(List<String> tags) {
+    _defaultTags = List.of(tags);
+    prefs?.setStringList('defaultTags', _defaultTags);
+    notifyListeners();
+  }
+
+  void setRatingAsNumber(bool value) {
+    _ratingAsNumber = value;
+    prefs?.setBool('ratingAsNumber', value);
+    notifyListeners();
+  }
+
+  void setShowFormatOnCards(bool value) {
+    _showFormatOnCards = value;
+    prefs?.setBool('showFormatOnCards', value);
+    notifyListeners();
+  }
+
+  void setShowTagsOnCards(bool value) {
+    _showTagsOnCards = value;
+    prefs?.setBool('showTagsOnCards', value);
+    notifyListeners();
+  }
+
+  /// Sets the order of the four main shelf tabs. Anything missing from
+  /// [order] is added at the end.
+  void setShelfOrder(List<Shelf> order) {
+    _shelfOrder = _cleanShelfOrder(order);
+    prefs?.setStringList('shelfOrder', [for (final s in _shelfOrder) s.name]);
+    notifyListeners();
   }
 
   /// Choosing the field that is already selected flips the direction.
@@ -353,6 +465,21 @@ class AppSettings extends ChangeNotifier {
   }
 
   int? goalFor(int year) => _goals[year];
+
+  /// The number of pages to finish in [year], or null for no pages goal.
+  int? pagesGoalFor(int year) => _pageGoals[year];
+
+  /// A null or zero goal removes the pages goal for that year.
+  void setPagesGoal(int year, int? goal) {
+    if (goal == null || goal <= 0) {
+      _pageGoals.remove(year);
+      prefs?.remove('pagesgoal_$year');
+    } else {
+      _pageGoals[year] = goal;
+      prefs?.setInt('pagesgoal_$year', goal);
+    }
+    notifyListeners();
+  }
 
   /// A null or zero goal removes the goal for that year.
   void setGoal(int year, int? goal) {

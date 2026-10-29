@@ -10,7 +10,7 @@ import 'package:chapterly/models/book.dart';
 import 'package:chapterly/models/shelf.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Book _book(String id, {String title = 'Title', DateTime? updated, String? cover}) =>
+Book _book(String id, {String title = 'Title', DateTime? updated}) =>
     Book(
       id: id,
       title: title,
@@ -18,7 +18,6 @@ Book _book(String id, {String title = 'Title', DateTime? updated, String? cover}
       shelf: Shelf.forLater,
       addedAt: DateTime(2026),
       updatedAt: updated,
-      coverPath: cover,
     );
 
 final _t1 = DateTime(2026, 1, 1);
@@ -97,15 +96,6 @@ void main() {
         remoteTombs: {'1': _t2},
       );
       expect(result.tombstones, {'1': _t2});
-    });
-
-    test('a cover photo from this phone survives a PC copy winning', () {
-      final result = _merge(
-        local: [_book('1', updated: _t1, cover: '/data/cover.img')],
-        remote: [_book('1', title: 'From PC', updated: _t2)],
-      );
-      expect(result.books.single.title, 'From PC');
-      expect(result.books.single.coverPath, '/data/cover.img');
     });
   });
 

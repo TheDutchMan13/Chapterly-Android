@@ -145,7 +145,6 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
                   Center(
                     child: BookCover(
                       coverUrl: shown.coverUrl,
-                      coverPath: shown.coverPath,
                       width: 140,
                       height: 210,
                     ),

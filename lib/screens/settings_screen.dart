@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../data/app_info.dart';
 import '../data/app_settings.dart';
 import '../data/backup.dart';
 import '../data/book_repository.dart';
@@ -9,7 +11,11 @@ import '../data/file_io.dart';
 import '../data/phone_sync.dart';
 import '../data/sync_server.dart';
 import '../data/theme_options.dart';
+import '../models/book_format.dart';
+import '../models/shelf.dart';
 import 'pin_dialogs.dart';
+import 'shelf_order_screen.dart';
+import 'whats_new_screen.dart';
 
 /// Accent colour and font, backup and restore, and CSV import and export.
 class SettingsScreen extends StatefulWidget {
@@ -31,6 +37,76 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _editDefaultTags() async {
+    final controller = TextEditingController(
+      text: widget.settings.defaultTags.join(', '),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tags for new books'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Tags',
+            helperText: 'Separate with commas. Leave empty for none.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final text = controller.text;
+    controller.dispose();
+    if (saved != true) return;
+    widget.settings.setDefaultTags(parseTags(text));
+  }
+
+  void _openShelfOrder() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ShelfOrderScreen(settings: widget.settings),
+      ),
+    );
+  }
+
+  void _openChangelog() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const WhatsNewScreen()),
+    );
+  }
+
+  Future<void> _openSource() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final opened = await launchUrl(
+      Uri.parse(sourceCodeUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the link.')),
+      );
+    }
+  }
+
+  void _openLicence() {
+    showLicensePage(
+      context: context,
+      applicationName: appName,
+      applicationVersion: appVersion,
+      applicationLegalese: '$licenceName. Full text: $licenceUrl',
+    );
+  }
+
   Future<void> _setPin() async {
     final pin = await askNewPin(context);
     if (pin == null) return;
@@ -278,6 +354,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          const _SectionHeader('Adding books'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) => Column(
+              children: [
+                ListTile(
+                  title: const Text('Put new books on'),
+                  trailing: DropdownButton<Shelf?>(
+                    value: widget.settings.defaultShelf,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Ask every time'),
+                      ),
+                      for (final shelf in Shelf.values)
+                        DropdownMenuItem(
+                          value: shelf,
+                          child: Text(shelf.label),
+                        ),
+                    ],
+                    onChanged: widget.settings.setDefaultShelf,
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Format of new books'),
+                  trailing: DropdownButton<BookFormat?>(
+                    value: widget.settings.defaultFormat,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Not set'),
+                      ),
+                      for (final format in BookFormat.values)
+                        DropdownMenuItem(
+                          value: format,
+                          child: Text(format.label),
+                        ),
+                    ],
+                    onChanged: widget.settings.setDefaultFormat,
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Tags for new books'),
+                  subtitle: Text(
+                    widget.settings.defaultTags.isEmpty
+                        ? 'None'
+                        : widget.settings.defaultTags.join(', '),
+                  ),
+                  onTap: _editDefaultTags,
+                ),
+              ],
+            ),
+          ),
+          const _SectionHeader('Library'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) => Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Show ratings as numbers'),
+                  subtitle: const Text('4/5 instead of stars'),
+                  value: widget.settings.ratingAsNumber,
+                  onChanged: widget.settings.setRatingAsNumber,
+                ),
+                SwitchListTile(
+                  title: const Text('Show format on book cards'),
+                  value: widget.settings.showFormatOnCards,
+                  onChanged: widget.settings.setShowFormatOnCards,
+                ),
+                SwitchListTile(
+                  title: const Text('Show tags on book cards'),
+                  value: widget.settings.showTagsOnCards,
+                  onChanged: widget.settings.setShowTagsOnCards,
+                ),
+                ListTile(
+                  title: const Text('Order of shelf tabs'),
+                  subtitle: Text(
+                    [for (final s in widget.settings.shelfOrder) s.label]
+                        .join(' · '),
+                  ),
+                  onTap: _openShelfOrder,
+                ),
+              ],
+            ),
+          ),
           const _SectionHeader('Backup'),
           ListTile(
             leading: const Icon(Icons.upload_file),
@@ -370,6 +531,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Chapterly has no account, ads or tracking. The only internet '
               'use is searching Open Library and loading cover images.',
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.rocket_launch_outlined),
+            title: Text('Version'),
+            subtitle: Text(appVersion),
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Changelog'),
+            subtitle: const Text("See what's new in Chapterly"),
+            onTap: _openChangelog,
+          ),
+          ListTile(
+            leading: const Icon(Icons.code),
+            title: const Text('Source code'),
+            subtitle: const Text('See on GitHub'),
+            onTap: _openSource,
+          ),
+          ListTile(
+            leading: const Icon(Icons.copyright_outlined),
+            title: const Text('Licence'),
+            subtitle: const Text(licenceName),
+            onTap: _openLicence,
           ),
         ],
       ),

@@ -33,6 +33,37 @@ bool _matchesQuery(Book book, String query) {
       book.tags.any((tag) => tag.toLowerCase().contains(text));
 }
 
+/// Whether [book] passes the filters shared by every list in the library.
+///
+/// [tags]: with [matchAllTags] the book needs all of them, otherwise any one.
+/// [excludedTags]: the book must have none of them. [formats]: any of them
+/// (when not empty). [finishYear]: the book was finished in that year.
+bool _passes(
+  Book book, {
+  required Set<String> tags,
+  required bool matchAllTags,
+  required Set<String> excludedTags,
+  required String query,
+  required bool favoritesOnly,
+  required Set<BookFormat> formats,
+  required int? finishYear,
+}) {
+  if (tags.isNotEmpty) {
+    final ok = matchAllTags
+        ? tags.every(book.tags.contains)
+        : tags.any(book.tags.contains);
+    if (!ok) return false;
+  }
+  if (excludedTags.any(book.tags.contains)) return false;
+  if (favoritesOnly && !book.favorite) return false;
+  if (formats.isNotEmpty && !formats.contains(book.format)) return false;
+  if (finishYear != null &&
+      !book.finishedReadings.any((r) => r.finishedAt?.year == finishYear)) {
+    return false;
+  }
+  return _matchesQuery(book, query);
+}
+
 /// Moves a book to another shelf. Moving to "In progress" records today as
 /// the start date and moving to "Finished" records today as the finish date,
 /// unless those dates are already set.
@@ -88,23 +119,33 @@ class BookRepository extends ChangeNotifier {
   }
 
   /// Books on [shelf] that are not in the trash. Every filter given must match:
-  /// [tags] (all of them), [query] (title, author, ISBN or a tag),
-  /// [favoritesOnly], and [formats] (any of them, when not empty).
+  /// [tags] (all of them, or any when [matchAllTags] is false), [excludedTags]
+  /// (none of them), [query] (title, author, ISBN or a tag), [favoritesOnly],
+  /// [formats] (any of them, when not empty) and [finishYear].
   List<Book> booksOn(
     Shelf shelf, {
     Set<String> tags = const {},
+    bool matchAllTags = true,
+    Set<String> excludedTags = const {},
     String query = '',
     bool favoritesOnly = false,
     Set<BookFormat> formats = const {},
+    int? finishYear,
   }) =>
       [
         for (final book in _books)
           if (book.deletedAt == null &&
               book.shelf == shelf &&
-              tags.every(book.tags.contains) &&
-              (!favoritesOnly || book.favorite) &&
-              (formats.isEmpty || formats.contains(book.format)) &&
-              _matchesQuery(book, query))
+              _passes(
+                book,
+                tags: tags,
+                matchAllTags: matchAllTags,
+                excludedTags: excludedTags,
+                query: query,
+                favoritesOnly: favoritesOnly,
+                formats: formats,
+                finishYear: finishYear,
+              ))
             book,
       ];
 
@@ -113,20 +154,43 @@ class BookRepository extends ChangeNotifier {
   List<Book> booksInCollection(
     String name, {
     Set<String> tags = const {},
+    bool matchAllTags = true,
+    Set<String> excludedTags = const {},
     String query = '',
     bool favoritesOnly = false,
     Set<BookFormat> formats = const {},
+    int? finishYear,
   }) =>
       [
         for (final book in _books)
           if (book.deletedAt == null &&
               book.collections.contains(name) &&
-              tags.every(book.tags.contains) &&
-              (!favoritesOnly || book.favorite) &&
-              (formats.isEmpty || formats.contains(book.format)) &&
-              _matchesQuery(book, query))
+              _passes(
+                book,
+                tags: tags,
+                matchAllTags: matchAllTags,
+                excludedTags: excludedTags,
+                query: query,
+                favoritesOnly: favoritesOnly,
+                formats: formats,
+                finishYear: finishYear,
+              ))
             book,
       ];
+
+  /// The years in which a book was finished (every reading counts), newest
+  /// first.
+  List<int> get finishedYears {
+    final years = <int>{};
+    for (final book in _books) {
+      if (book.deletedAt != null) continue;
+      for (final reading in book.finishedReadings) {
+        final year = reading.finishedAt?.year;
+        if (year != null) years.add(year);
+      }
+    }
+    return years.toList()..sort((a, b) => b.compareTo(a));
+  }
 
   /// Names of your own shelves that have at least one book (not in the
   /// trash), sorted alphabetically.
@@ -212,9 +276,6 @@ class BookRepository extends ChangeNotifier {
     final value = text == null || text.isEmpty ? null : text;
     return _update(id, (book) => book.copyWith(notes: () => value));
   }
-
-  Future<void> setCoverPath(String id, String? path) =>
-      _update(id, (book) => book.copyWith(coverPath: () => path));
 
   Future<void> setDates(
     String id, {
@@ -428,6 +489,17 @@ class BookRepository extends ChangeNotifier {
 
   Future<void> moveAllTo(Set<String> ids, Shelf shelf) =>
       _updateMany(ids, (book) => _withShelf(book, shelf));
+
+  /// Sets the format of every book in [ids]. Null clears it.
+  Future<void> setFormatAll(Set<String> ids, BookFormat? format) =>
+      _updateMany(ids, (book) => book.copyWith(format: () => format));
+
+  /// Sets the author of every book in [ids].
+  Future<void> setAuthorAll(Set<String> ids, String author) {
+    final clean = author.trim();
+    if (clean.isEmpty) return Future.value();
+    return _updateMany(ids, (book) => book.copyWith(author: clean));
+  }
 
   /// Adds [tag] to every book in [ids] that does not have it yet.
   Future<void> addTagToAll(Set<String> ids, String tag) {

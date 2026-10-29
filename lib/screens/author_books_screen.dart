@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/open_library_client.dart';
 import '../models/shelf.dart';
@@ -17,11 +18,13 @@ class AuthorBooksScreen extends StatefulWidget {
     required this.repository,
     required this.client,
     required this.author,
+    required this.settings,
   });
 
   final BookRepository repository;
   final OpenLibraryClient client;
   final String author;
+  final AppSettings settings;
 
   @override
   State<AuthorBooksScreen> createState() => _AuthorBooksScreenState();
@@ -75,12 +78,14 @@ class _AuthorBooksScreenState extends State<AuthorBooksScreen> {
   }
 
   Future<void> _add(OpenLibraryBook result) async {
-    final shelf = await showShelfPicker(context);
+    final shelf = await chooseShelfForNewBook(context, widget.settings);
     if (shelf == null || !mounted) return;
     await widget.repository.add(
       title: result.title,
       author: result.author,
       shelf: shelf,
+      tags: widget.settings.defaultTags,
+      format: widget.settings.defaultFormat,
       isbn: result.isbn,
       coverUrl: result.coverUrl,
       firstPublishYear: result.firstPublishYear,

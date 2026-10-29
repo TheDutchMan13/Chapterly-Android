@@ -27,17 +27,39 @@ class NewBookData {
 
 /// Returns the entered details, or null if the dialog was cancelled.
 /// Pass [isbn] (for example from a scan) to save it with the book.
-Future<NewBookData?> showAddBookDialog(BuildContext context, {String? isbn}) {
+///
+/// [initialShelf], [initialFormat] and [initialTags] fill in the form first
+/// (the defaults from Settings).
+Future<NewBookData?> showAddBookDialog(
+  BuildContext context, {
+  String? isbn,
+  Shelf initialShelf = Shelf.forLater,
+  BookFormat? initialFormat,
+  List<String> initialTags = const [],
+}) {
   return showDialog<NewBookData>(
     context: context,
-    builder: (_) => _AddBookDialog(isbn: isbn),
+    builder: (_) => _AddBookDialog(
+      isbn: isbn,
+      initialShelf: initialShelf,
+      initialFormat: initialFormat,
+      initialTags: initialTags,
+    ),
   );
 }
 
 class _AddBookDialog extends StatefulWidget {
-  const _AddBookDialog({this.isbn});
+  const _AddBookDialog({
+    this.isbn,
+    required this.initialShelf,
+    required this.initialFormat,
+    required this.initialTags,
+  });
 
   final String? isbn;
+  final Shelf initialShelf;
+  final BookFormat? initialFormat;
+  final List<String> initialTags;
 
   @override
   State<_AddBookDialog> createState() => _AddBookDialogState();
@@ -48,8 +70,14 @@ class _AddBookDialogState extends State<_AddBookDialog> {
   final _author = TextEditingController();
   final _pages = TextEditingController();
   final _tags = TextEditingController();
-  Shelf _shelf = Shelf.forLater;
-  BookFormat? _format;
+  late Shelf _shelf = widget.initialShelf;
+  late BookFormat? _format = widget.initialFormat;
+
+  @override
+  void initState() {
+    super.initState();
+    _tags.text = widget.initialTags.join(', ');
+  }
 
   @override
   void dispose() {

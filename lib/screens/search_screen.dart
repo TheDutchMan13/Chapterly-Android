@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/open_library_client.dart';
 import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
+import 'edition_picker_screen.dart';
 import 'shelf_picker.dart';
 
 /// Search Open Library and add results to a shelf.
@@ -12,10 +14,12 @@ class SearchScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.client,
+    required this.settings,
   });
 
   final BookRepository repository;
   final OpenLibraryClient client;
+  final AppSettings settings;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -60,12 +64,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _add(OpenLibraryBook result) async {
-    final shelf = await showShelfPicker(context);
+    final shelf = await chooseShelfForNewBook(context, widget.settings);
     if (shelf == null || !mounted) return;
     await widget.repository.add(
       title: result.title,
       author: result.author,
       shelf: shelf,
+      tags: widget.settings.defaultTags,
+      format: widget.settings.defaultFormat,
       isbn: result.isbn,
       coverUrl: result.coverUrl,
       firstPublishYear: result.firstPublishYear,
@@ -75,6 +81,19 @@ class _SearchScreenState extends State<SearchScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Added "${result.title}" to ${shelf.label}')),
     );
+  }
+
+  Future<void> _chooseEdition(OpenLibraryBook result) async {
+    final chosen = await Navigator.of(context).push<OpenLibraryBook>(
+      MaterialPageRoute<OpenLibraryBook>(
+        builder: (_) => EditionPickerScreen(
+          client: widget.client,
+          book: result,
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await _add(chosen);
   }
 
   Widget _buildResults() {
@@ -88,7 +107,9 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
     if (!_searched) {
-      return const Center(child: Text('Search by title, author or ISBN.'));
+      return const Center(
+        child: Text('Search by title, author, ISBN or Open Library ID.'),
+      );
     }
     if (_results.isEmpty) {
       return const Center(child: Text('No books found.'));
@@ -101,7 +122,18 @@ class _SearchScreenState extends State<SearchScreen> {
           leading: BookCover(coverUrl: result.coverUrl),
           title: Text(result.title),
           subtitle: Text(result.subtitle),
-          trailing: const Icon(Icons.add),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (result.workKey != null)
+                IconButton(
+                  tooltip: 'Choose an edition',
+                  icon: const Icon(Icons.library_books_outlined),
+                  onPressed: () => _chooseEdition(result),
+                ),
+              const Icon(Icons.add),
+            ],
+          ),
           onTap: () => _add(result),
         );
       },
@@ -122,7 +154,7 @@ class _SearchScreenState extends State<SearchScreen> {
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => _search(),
               decoration: InputDecoration(
-                hintText: 'Title, author or ISBN',
+                hintText: 'Title, author, ISBN or Open Library ID',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.search),

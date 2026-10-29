@@ -61,7 +61,7 @@ Fields (all optional except `id`, `title`, `shelf`, `addedAt`, `updatedAt`):
     readingLog (list of {date, pages, minutes}),
     previousReadings (list of {startedAt, finishedAt, rating, log})
 
-Dates are ISO 8601 text. Cover photos picked on the phone are not sent.
+Dates are ISO 8601 text.
 
 ## Merging rules
 

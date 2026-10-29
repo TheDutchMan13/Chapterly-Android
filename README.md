@@ -10,7 +10,7 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   scanning a barcode (ISBN), or manually
 - Book screen: shelf, format (paperback, hardcover, e-book, audiobook),
   1-5 star rating, start and finish dates, page count, tags, notes/review,
-  favorite heart, and your own cover from a phone photo. Moving a book to
+  favorite heart. Moving a book to
   In progress or Finished stamps today's date
 - Reading log: write down pages read per day; shown in the statistics
 - Re-reads: "Read again" saves the finished reading (dates, rating, log) under
@@ -43,6 +43,19 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
 - Light, dark or phone-following theme, with an optional pure black dark mode
 - Backup reminder: a banner asks for a new backup after 2 weeks to 3 months
   (your choice, or switch it off)
+- Defaults for new books (Settings > Adding books): the shelf (or ask every
+  time), format and tags
+- Edition picker: the editions button on a search result lists every printing,
+  so you can add the exact one (ISBN, page count, cover). Search also finds
+  Open Library IDs such as OL45804W
+- More ways to browse: sort by publication year or date modified, filter by
+  the year you finished, match all or any selected tags, and hide books with a
+  tag (tap a tag chip twice)
+- Bulk edit: change the format or author of selected books (with Undo)
+- Show ratings as stars or numbers, and choose whether cards show the format
+  and tags (Settings > Library). Reorder the shelf tabs there too
+- Yearly pages goal next to the books goal, and charts of pages finished per
+  month and per year
 - Sync with a PC on your home Wi-Fi (Settings > Sync with a PC). Off by
   default. Works while Chapterly is open. Settings shows when the last sync
   happened and what it did. The protocol is in `docs/SYNC.md`

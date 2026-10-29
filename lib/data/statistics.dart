@@ -13,6 +13,8 @@ class BookStats {
     required this.longest,
     required this.byMonth,
     required this.byYear,
+    required this.pagesByMonth,
+    required this.pagesByYear,
     required this.shelfCounts,
     required this.finishedWithoutDate,
     required this.loggedPages,
@@ -37,6 +39,13 @@ class BookStats {
 
   /// Finished readings per year, oldest first. Always covers every year.
   final Map<int, int> byYear;
+
+  /// Pages of the books finished per month (index 0 is January) in the
+  /// chosen year. Books with no page count add nothing.
+  final List<int> pagesByMonth;
+
+  /// Pages of the books finished per year, for the same years as [byYear].
+  final Map<int, int> pagesByYear;
   final Map<Shelf, int> shelfCounts;
 
   /// Finished readings that have no finish date, so no month or year.
@@ -88,6 +97,7 @@ BookStats computeStats(List<Book> books, {int? year}) {
   final tagCounts = <String, int>{};
   final tagNames = <String, String>{};
   final byMonth = List<int>.filled(12, 0);
+  final pagesByMonth = List<int>.filled(12, 0);
   for (final (book, reading) in finished) {
     final pages = book.pages;
     if (pages != null) {
@@ -116,17 +126,22 @@ BookStats computeStats(List<Book> books, {int? year}) {
     final format = book.format;
     if (format != null) formatCounts[format] = (formatCounts[format] ?? 0) + 1;
     final date = reading.finishedAt;
-    if (date != null) byMonth[date.month - 1]++;
+    if (date != null) {
+      byMonth[date.month - 1]++;
+      if (pages != null) pagesByMonth[date.month - 1] += pages;
+    }
   }
 
   final yearCounts = <int, int>{};
+  final yearPages = <int, int>{};
   var withoutDate = 0;
-  for (final (_, reading) in all) {
+  for (final (book, reading) in all) {
     final date = reading.finishedAt;
     if (date == null) {
       withoutDate++;
     } else {
       yearCounts[date.year] = (yearCounts[date.year] ?? 0) + 1;
+      yearPages[date.year] = (yearPages[date.year] ?? 0) + (book.pages ?? 0);
     }
   }
   final sortedYears = yearCounts.keys.toList()..sort();
@@ -159,6 +174,8 @@ BookStats computeStats(List<Book> books, {int? year}) {
     longest: longest,
     byMonth: byMonth,
     byYear: {for (final y in sortedYears) y: yearCounts[y]!},
+    pagesByMonth: pagesByMonth,
+    pagesByYear: {for (final y in sortedYears) y: yearPages[y] ?? 0},
     shelfCounts: {
       for (final shelf in Shelf.values)
         shelf: books.where((b) => b.shelf == shelf).length,
@@ -327,15 +344,18 @@ class ChallengeStatus {
   /// Null for years that are not the current year.
   final int? ahead;
 
-  String describe() {
+  /// A short sentence such as "14 to go · 2 ahead of pace". Pass a [unit]
+  /// such as "pages" for goals that are not counted in books.
+  String describe({String unit = ''}) {
     if (remaining == 0) return 'Goal reached!';
-    final parts = ['$remaining to go'];
+    final suffix = unit.isEmpty ? '' : ' $unit';
+    final parts = ['$remaining$suffix to go'];
     final pace = ahead;
     if (pace != null) {
       if (pace > 0) {
-        parts.add('$pace ahead of pace');
+        parts.add('$pace$suffix ahead of pace');
       } else if (pace < 0) {
-        parts.add('${-pace} behind pace');
+        parts.add('${-pace}$suffix behind pace');
       } else {
         parts.add('on pace');
       }

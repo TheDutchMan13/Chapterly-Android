@@ -11,8 +11,7 @@ class MergedLibrary {
 ///
 /// For each book the copy changed most recently wins. A book that was
 /// permanently deleted on either device stays deleted, unless it was changed
-/// after the deletion. A cover photo picked on this phone is kept when the
-/// other device's copy wins, because cover photos are never sent.
+/// after the deletion.
 MergedLibrary mergeLibraries({
   required List<Book> local,
   required Map<String, DateTime> localTombstones,
@@ -29,21 +28,12 @@ MergedLibrary mergeLibraries({
     }
   }
 
-  final localById = {for (final book in local) book.id: book};
   final winners = <String, Book>{};
   // Local copies come first, so they win a tie.
   for (final book in [...local, ...remote]) {
     final current = winners[book.id];
     if (current == null || book.updatedAt.isAfter(current.updatedAt)) {
       winners[book.id] = book;
-    }
-  }
-
-  for (final id in winners.keys.toList()) {
-    final winner = winners[id]!;
-    final mine = localById[id];
-    if (mine != null && winner.coverPath == null && mine.coverPath != null) {
-      winners[id] = winner.copyWith(coverPath: () => mine.coverPath);
     }
   }
 

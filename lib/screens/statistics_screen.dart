@@ -64,6 +64,68 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     widget.settings.setGoal(year, int.tryParse(controller.text.trim()));
   }
 
+  Future<void> _editPagesGoal(int year, int? current) async {
+    final controller = TextEditingController(text: current?.toString() ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$year pages goal'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Pages to read',
+            helperText: 'Leave empty to remove the goal',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final text = controller.text;
+    controller.dispose();
+    if (saved != true) return;
+    widget.settings.setPagesGoal(year, int.tryParse(text.trim()));
+  }
+
+  Widget _pagesGoalCard(int year, BookStats stats) {
+    final goal = widget.settings.pagesGoalFor(year);
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$year pages goal', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (goal == null)
+              const Text('No pages goal set for this year.')
+            else
+              _challengeRow(year, goal, stats.pagesRead, unit: 'pages'),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _editPagesGoal(year, goal),
+                child: Text(goal == null ? 'Set a goal' : 'Change goal'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _editMonthlyGoal(int? current) async {
     final controller = TextEditingController(text: current?.toString() ?? '');
     final saved = await showDialog<bool>(
@@ -166,7 +228,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     ];
   }
 
-  Widget _challengeRow(int year, int goal, int finished) {
+  Widget _challengeRow(int year, int goal, int finished, {String unit = ''}) {
     final status = challengeStatus(
       finished: finished,
       goal: goal,
@@ -190,7 +252,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
               ),
               Text(
-                '${status.finished}/${status.goal}',
+                unit.isEmpty
+                    ? '${status.finished}/${status.goal}'
+                    : '${(status.progress * 100).round()}%',
                 style: textTheme.titleMedium,
               ),
             ],
@@ -198,7 +262,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Text(status.describe(), style: textTheme.bodyLarge),
+          child: Text(
+            unit.isEmpty
+                ? status.describe()
+                : '${status.finished} of ${status.goal} $unit\n'
+                    '${status.describe(unit: unit)}',
+            style: textTheme.bodyLarge,
+          ),
         ),
       ],
     );
@@ -334,6 +404,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 const SizedBox(height: 24),
                 _goalCard(year, stats),
                 const SizedBox(height: 12),
+                _pagesGoalCard(year, stats),
+                const SizedBox(height: 12),
                 _monthlyGoalCard(year, stats),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
@@ -418,6 +490,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   labels: [for (final y in overall.byYear.keys) '$y'],
                   values: overall.byYear.values.toList(),
                 ),
+                if (overall.pagesByYear.values.any((pages) => pages > 0)) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Pages finished per year',
+                    style: textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _BarChart(
+                    labels: [for (final y in overall.pagesByYear.keys) '$y'],
+                    values: overall.pagesByYear.values.toList(),
+                  ),
+                ],
               ] else if (year != null) ...[
                 Text(
                   'Books finished per month in $year',
@@ -425,6 +509,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
                 const SizedBox(height: 8),
                 _BarChart(labels: _monthLetters, values: stats.byMonth),
+                if (stats.pagesRead > 0) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Pages finished per month in $year',
+                    style: textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _BarChart(labels: _monthLetters, values: stats.pagesByMonth),
+                ],
                 if (stats.loggedPages > 0) ...[
                   const SizedBox(height: 24),
                   Text(
@@ -491,6 +584,13 @@ class _StatTile extends StatelessWidget {
   }
 }
 
+/// 1200 becomes "1.2k" so big numbers fit above a narrow bar.
+String _compact(int value) {
+  if (value < 1000) return value.toString();
+  final thousands = value / 1000;
+  return '${thousands.toStringAsFixed(thousands < 10 ? 1 : 0)}k';
+}
+
 class _BarChart extends StatelessWidget {
   const _BarChart({required this.labels, required this.values});
 
@@ -516,7 +616,7 @@ class _BarChart extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      values[i] == 0 ? '' : values[i].toString(),
+                      values[i] == 0 ? '' : _compact(values[i]),
                       textAlign: TextAlign.center,
                       style: labelStyle,
                     ),

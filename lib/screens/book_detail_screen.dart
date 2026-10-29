@@ -7,6 +7,7 @@ import '../data/collections.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
 import '../data/open_library_client.dart';
+import '../data/rating_text.dart';
 import '../data/statistics.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
@@ -19,7 +20,7 @@ import 'log_entry_dialog.dart';
 import 'similar_books_screen.dart';
 
 /// Shows one book. Change its shelf, format, rating, dates, pages, tags,
-/// notes and cover, keep a reading log, read it again, or move it to the trash.
+/// notes, keep a reading log, read it again, or move it to the trash.
 class BookDetailScreen extends StatelessWidget {
   const BookDetailScreen({
     super.key,
@@ -284,44 +285,6 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _editCover(BuildContext context, Book book) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose a photo'),
-              onTap: () => Navigator.of(sheetContext).pop('pick'),
-            ),
-            if (book.coverPath != null)
-              ListTile(
-                leading: const Icon(Icons.hide_image_outlined),
-                title: const Text('Remove my cover'),
-                onTap: () => Navigator.of(sheetContext).pop('remove'),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (choice == null || !context.mounted) return;
-    if (choice == 'remove') {
-      await repository.setCoverPath(book.id, null);
-      return;
-    }
-    try {
-      final path = await fileIo.pickCoverImage(book.id);
-      if (path != null) await repository.setCoverPath(book.id, path);
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not use that photo.')),
-      );
-    }
-  }
-
   Future<void> _trash(BuildContext context, Book book) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -453,6 +416,7 @@ class BookDetailScreen extends StatelessWidget {
           repository: repository,
           client: OpenLibraryClient(),
           author: author,
+          settings: settings,
         ),
       ),
     );
@@ -499,14 +463,39 @@ class BookDetailScreen extends StatelessWidget {
     ].join(' → ');
     return [
       if (dates.isNotEmpty) dates else 'No dates',
-      if (reading.rating != null) '★ ${reading.rating}',
+      if (reading.rating != null)
+        ratingText(reading.rating!, asNumber: settings.ratingAsNumber),
     ].join(' · ');
+  }
+
+  Future<void> _rate(BuildContext context, Book book) async {
+    final choice = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Your rating'),
+        children: [
+          for (var value = 5; value >= 1; value--)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(value),
+              child: Text(
+                ratingText(value, asNumber: settings.ratingAsNumber),
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(0),
+            child: const Text('No rating'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    await repository.setRating(book.id, choice == 0 ? null : choice);
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: repository,
+      listenable: Listenable.merge([repository, settings]),
       builder: (context, _) {
         final book = repository.byId(bookId);
         if (book == null) return const Scaffold(body: SizedBox.shrink());
@@ -548,26 +537,10 @@ class BookDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               Center(
-                child: InkWell(
-                  onTap: () => _editCover(context, book),
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      BookCover(
-                        coverUrl: book.coverUrl,
-                        coverPath: book.coverPath,
-                        width: 120,
-                        height: 180,
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: CircleAvatar(
-                          radius: 14,
-                          child: Icon(Icons.edit, size: 16),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: BookCover(
+                  coverUrl: book.coverUrl,
+                  width: 120,
+                  height: 180,
                 ),
               ),
               const SizedBox(height: 16),
@@ -625,25 +598,39 @@ class BookDetailScreen extends StatelessWidget {
                 onChanged: (value) => repository.setFormat(book.id, value),
               ),
               const SizedBox(height: 24),
-              Text('Your rating', style: textTheme.titleMedium),
-              Row(
-                children: [
-                  for (var star = 1; star <= 5; star++)
-                    IconButton(
-                      tooltip: '$star of 5',
-                      icon: Icon(
-                        star <= (book.rating ?? 0)
-                            ? Icons.star
-                            : Icons.star_border,
-                        color: Colors.amber,
+              if (settings.ratingAsNumber)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.star_outline),
+                  title: const Text('Your rating'),
+                  subtitle: Text(
+                    book.rating == null
+                        ? 'Not rated'
+                        : ratingText(book.rating!, asNumber: true),
+                  ),
+                  onTap: () => _rate(context, book),
+                )
+              else ...[
+                Text('Your rating', style: textTheme.titleMedium),
+                Row(
+                  children: [
+                    for (var star = 1; star <= 5; star++)
+                      IconButton(
+                        tooltip: '$star of 5',
+                        icon: Icon(
+                          star <= (book.rating ?? 0)
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                        ),
+                        onPressed: () => repository.setRating(
+                          book.id,
+                          book.rating == star ? null : star,
+                        ),
                       ),
-                      onPressed: () => repository.setRating(
-                        book.id,
-                        book.rating == star ? null : star,
-                      ),
-                    ),
-                ],
-              ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 8),
               _dateTile(context, book, start: true),
               _dateTile(context, book, start: false),
