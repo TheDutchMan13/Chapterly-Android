@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
+import '../data/date_format.dart';
 import '../data/statistics.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
@@ -59,6 +60,88 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     widget.settings.setGoal(year, int.tryParse(controller.text.trim()));
   }
 
+  Future<void> _editMonthlyGoal(int? current) async {
+    final controller = TextEditingController(text: current?.toString() ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Monthly reading goal'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Books to finish every month',
+            helperText: 'Leave empty to remove the goal',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final goal = int.tryParse(controller.text.trim());
+    controller.dispose();
+    if (saved != true) return;
+    widget.settings.setMonthlyGoal(goal);
+  }
+
+  Widget _monthlyGoalCard(int year, BookStats stats) {
+    final goal = widget.settings.monthlyGoal;
+    final textTheme = Theme.of(context).textTheme;
+    final now = DateTime.now();
+    final months = year == now.year ? now.month : year < now.year ? 12 : 0;
+    var met = 0;
+    if (goal != null) {
+      for (var m = 0; m < months; m++) {
+        if (stats.byMonth[m] >= goal) met++;
+      }
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Monthly goal', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (goal == null)
+              const Text('No monthly goal set.')
+            else ...[
+              Text('Goal: $goal books a month'),
+              Text('Reached in $met of $months months of $year'),
+              if (year == now.year) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: (stats.byMonth[now.month - 1] / goal)
+                      .clamp(0.0, 1.0)
+                      .toDouble(),
+                ),
+                const SizedBox(height: 4),
+                Text('This month: ${stats.byMonth[now.month - 1]} of $goal'),
+              ],
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _editMonthlyGoal(goal),
+                child: Text(goal == null ? 'Set a goal' : 'Change goal'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _goalCard(int year, BookStats stats) {
     final goal = widget.settings.goalFor(year);
     final textTheme = Theme.of(context).textTheme;
@@ -113,6 +196,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           final average = stats.averageRating;
           final longest = stats.longest;
           final textTheme = Theme.of(context).textTheme;
+          final streak = currentStreak(books);
+          final pagesToday = pagesLoggedOn(books, DateTime.now());
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -161,6 +246,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       label: 'Pages in reading log',
                       value: stats.loggedPages.toString(),
                     ),
+                  if (stats.loggedMinutes > 0)
+                    _StatTile(
+                      label: 'Time read',
+                      value: formatMinutes(stats.loggedMinutes),
+                    ),
+                  if (streak > 0)
+                    _StatTile(
+                      label: 'Reading streak',
+                      value: '$streak ${streak == 1 ? 'day' : 'days'}',
+                    ),
+                  if (pagesToday > 0)
+                    _StatTile(
+                      label: 'Pages today',
+                      value: pagesToday.toString(),
+                    ),
                   if (longest != null)
                     _StatTile(
                       label: 'Longest book',
@@ -172,6 +272,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               if (year != null) ...[
                 const SizedBox(height: 24),
                 _goalCard(year, stats),
+                const SizedBox(height: 12),
+                _monthlyGoalCard(year, stats),
               ],
               if (year == null) ...[
                 const SizedBox(height: 24),

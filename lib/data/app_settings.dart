@@ -1,7 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum SortField { dateAdded, title, author, rating, pages, dateFinished }
+enum SortField {
+  dateAdded,
+  title,
+  author,
+  rating,
+  pages,
+  dateFinished,
+  format,
+  favorite,
+}
 
 extension SortFieldLabel on SortField {
   String get label => switch (this) {
@@ -11,6 +20,8 @@ extension SortFieldLabel on SortField {
         SortField.rating => 'Rating',
         SortField.pages => 'Pages',
         SortField.dateFinished => 'Date finished',
+        SortField.format => 'Format',
+        SortField.favorite => 'Favorites first',
       };
 }
 
@@ -30,6 +41,7 @@ class AppSettings extends ChangeNotifier {
   DisplayMode _display = DisplayMode.list;
   int _accent = defaultAccent;
   String? _fontFamily;
+  int? _monthlyGoal;
   final Map<int, int> _goals = {};
 
   SortField get sortField => _sortField;
@@ -41,6 +53,9 @@ class AppSettings extends ChangeNotifier {
 
   /// The name of a font on the phone, or null for the app's normal font.
   String? get fontFamily => _fontFamily;
+
+  /// Books to finish every month, or null for no monthly goal.
+  int? get monthlyGoal => _monthlyGoal;
 
   static Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -54,6 +69,7 @@ class AppSettings extends ChangeNotifier {
             DisplayMode.list;
     settings._accent = prefs.getInt('accent') ?? defaultAccent;
     settings._fontFamily = prefs.getString('font');
+    settings._monthlyGoal = prefs.getInt('monthly_goal');
     for (final key in prefs.getKeys()) {
       if (!key.startsWith('goal_')) continue;
       final year = int.tryParse(key.substring(5));
@@ -69,7 +85,9 @@ class AppSettings extends ChangeNotifier {
       _ascending = !_ascending;
     } else {
       _sortField = field;
-      _ascending = field == SortField.title || field == SortField.author;
+      _ascending = field == SortField.title ||
+          field == SortField.author ||
+          field == SortField.format;
     }
     _save();
     notifyListeners();
@@ -92,6 +110,18 @@ class AppSettings extends ChangeNotifier {
   void setFontFamily(String? family) {
     _fontFamily = family;
     _save();
+    notifyListeners();
+  }
+
+  /// A null or zero goal removes the monthly goal.
+  void setMonthlyGoal(int? goal) {
+    if (goal == null || goal <= 0) {
+      _monthlyGoal = null;
+      prefs?.remove('monthly_goal');
+    } else {
+      _monthlyGoal = goal;
+      prefs?.setInt('monthly_goal', goal);
+    }
     notifyListeners();
   }
 

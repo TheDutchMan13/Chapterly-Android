@@ -16,3 +16,11 @@ DateTime? parseDate(String? text) {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return DateTime(year, month, day);
 }
+
+/// 45m, 2h or 2h 5m.
+String formatMinutes(int minutes) {
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  if (hours == 0) return '${rest}m';
+  return rest == 0 ? '${hours}h' : '${hours}h ${rest}m';
+}

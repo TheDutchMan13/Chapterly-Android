@@ -20,6 +20,8 @@ const csvColumns = [
   'Format',
   'Favorite',
   'Notes',
+  'Series',
+  'Series Number',
 ];
 
 String _csvCell(String value) {
@@ -52,6 +54,8 @@ String encodeBooksCsv(List<Book> books) {
       book.format?.label ?? '',
       book.favorite ? 'yes' : '',
       book.notes ?? '',
+      book.series ?? '',
+      book.seriesNumber?.toString() ?? '',
     ];
     lines.add(cells.map(_csvCell).join(','));
   }
@@ -193,6 +197,8 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
   final formatColumns = find(['format', 'binding']);
   final favoriteColumns = find(['favorite', 'favourite']);
   final notesColumns = find(['notes', 'my review']);
+  final seriesColumns = find(['series']);
+  final seriesNumberColumns = find(['series number']);
 
   final books = <Book>[];
   var skipped = 0;
@@ -224,6 +230,10 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
       notes: _cell(row, notesColumns).isEmpty
           ? null
           : _cell(row, notesColumns),
+      series: _cell(row, seriesColumns).isEmpty
+          ? null
+          : _cell(row, seriesColumns),
+      seriesNumber: _parsePositiveInt(_cell(row, seriesNumberColumns)),
     ));
   }
   return CsvImportResult(books: books, skipped: skipped);

@@ -30,6 +30,8 @@ class SqliteBookStore implements BookStore {
       notes TEXT,
       deleted_at INTEGER,
       cover_path TEXT,
+      series TEXT,
+      series_number INTEGER,
       reading_log TEXT,
       previous_readings TEXT
     )
@@ -39,7 +41,7 @@ class SqliteBookStore implements BookStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'chapterly.db'),
-      version: 3,
+      version: 4,
       onCreate: (db, version) => db.execute(_createBooksTable),
       onUpgrade: (db, oldVersion, newVersion) async {
         // Version 2 added pages, rating and reading dates.
@@ -62,6 +64,13 @@ class SqliteBookStore implements BookStore {
           await db.execute('ALTER TABLE books ADD COLUMN reading_log TEXT');
           await db.execute(
             'ALTER TABLE books ADD COLUMN previous_readings TEXT',
+          );
+        }
+        // Version 4 added series.
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE books ADD COLUMN series TEXT');
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN series_number INTEGER',
           );
         }
       },

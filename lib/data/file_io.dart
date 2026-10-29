@@ -27,6 +27,23 @@ class FileIo {
     );
   }
 
+  /// Writes PNG [bytes] to a temporary file and opens the share sheet.
+  Future<void> shareImage({
+    required String fileName,
+    required List<int> bytes,
+    String? subject,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(bytes);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'image/png')],
+        subject: subject,
+      ),
+    );
+  }
+
   /// Lets the user pick any file and returns its text, or null if cancelled.
   Future<String?> pickTextFile() async {
     final file = await openFile();

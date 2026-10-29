@@ -16,12 +16,16 @@ class SimilarBooksScreen extends StatelessWidget {
     required this.fileIo,
     required this.title,
     required this.test,
+    this.compare,
   });
 
   final BookRepository repository;
   final FileIo fileIo;
   final String title;
   final bool Function(Book book) test;
+
+  /// Orders the list. Without it, the newest books come first.
+  final int Function(Book a, Book b)? compare;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,8 @@ class SimilarBooksScreen extends StatelessWidget {
           for (final book in repository.books)
             if (test(book)) book,
         ];
+        final order = compare;
+        if (order != null) books.sort(order);
         return Scaffold(
           appBar: AppBar(title: Text(title)),
           body: books.isEmpty

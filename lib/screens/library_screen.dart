@@ -80,8 +80,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Future<void> _moveSelected() async {
     final shelf = await showShelfPicker(context);
     if (shelf == null || !mounted) return;
-    await widget.repository.moveAllTo({..._selected}, shelf);
-    if (mounted) setState(_selected.clear);
+    final ids = {..._selected};
+    final before = [
+      for (final id in ids)
+        if (widget.repository.byId(id) case final book?) book,
+    ];
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.repository.moveAllTo(ids, shelf);
+    if (!mounted) return;
+    setState(_selected.clear);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Moved ${ids.length} book${ids.length == 1 ? '' : 's'} '
+          'to ${shelf.label}',
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => widget.repository.putBack(before),
+        ),
+      ),
+    );
   }
 
   Future<void> _tagSelected() async {
@@ -406,7 +425,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.settings,
+      listenable: Listenable.merge([widget.settings, widget.repository]),
       builder: (context, _) => DefaultTabController(
         length: Shelf.values.length,
         child: PopScope(
@@ -424,7 +443,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
               TabBar(
                 isScrollable: true,
                 tabs: [
-                  for (final shelf in Shelf.values) Tab(text: shelf.label),
+                  for (final shelf in Shelf.values)
+                    Tab(
+                      text: '${shelf.label} '
+                          '(${widget.repository.booksOn(shelf).length})',
+                    ),
                 ],
               ),
             ),

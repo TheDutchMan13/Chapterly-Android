@@ -194,13 +194,22 @@ class BookRepository extends ChangeNotifier {
 
   // ---- reading log and re-reads
 
-  /// Records pages read on a day for the current reading.
-  Future<void> addLogEntry(String id, DateTime date, int pages) =>
-      _update(id, (book) {
-        final log = [...book.readingLog, LogEntry(date: date, pages: pages)];
-        log.sort((a, b) => a.date.compareTo(b.date));
-        return book.copyWith(readingLog: log);
-      });
+  /// Records pages read and/or minutes spent reading on a day for the
+  /// current reading. Does nothing if both are 0.
+  Future<void> addLogEntry(
+    String id,
+    DateTime date,
+    int pages, {
+    int minutes = 0,
+  }) {
+    if (pages <= 0 && minutes <= 0) return Future.value();
+    return _update(id, (book) {
+      final entry = LogEntry(date: date, pages: pages, minutes: minutes);
+      final log = [...book.readingLog, entry];
+      log.sort((a, b) => a.date.compareTo(b.date));
+      return book.copyWith(readingLog: log);
+    });
+  }
 
   /// Removes an entry by its position in the book's log (oldest first).
   Future<void> removeLogEntry(String id, int index) => _update(id, (book) {
@@ -210,14 +219,15 @@ class BookRepository extends ChangeNotifier {
       });
 
   /// Saves the current reading under earlier readings and starts a new one:
-  /// the book moves to In progress with today as the start date, and the
-  /// finish date, rating and log are cleared.
-  Future<void> readAgain(String id) => _update(id, (book) {
-        final now = DateTime.now();
+  /// the book moves to In progress with [startedAt] (today if not given) as
+  /// the start date, and the finish date, rating and log are cleared.
+  Future<void> readAgain(String id, {DateTime? startedAt}) =>
+      _update(id, (book) {
+        final start = startedAt ?? DateTime.now();
         return book.copyWith(
           shelf: Shelf.inProgress,
           previousReadings: [...book.previousReadings, book.currentReading],
-          startedAt: () => now,
+          startedAt: () => start,
           finishedAt: () => null,
           rating: () => null,
           readingLog: const [],
@@ -232,6 +242,52 @@ class BookRepository extends ChangeNotifier {
         return book.copyWith(previousReadings: readings);
       });
 
+  // ---- series
+
+  /// An empty name clears the series (and the number).
+  Future<void> setSeries(String id, String? series, int? number) {
+    final name = series?.trim();
+    final clean = name == null || name.isEmpty ? null : name;
+    return _update(
+      id,
+      (book) => book.copyWith(
+        series: () => clean,
+        seriesNumber: () => clean == null ? null : number,
+      ),
+    );
+  }
+
+  /// Books (not in the trash) in the same series, ordered by number.
+  List<Book> booksInSeries(String series) {
+    final key = series.trim().toLowerCase();
+    final found = [
+      for (final book in _books)
+        if (book.deletedAt == null &&
+            book.series?.trim().toLowerCase() == key)
+          book,
+    ];
+    found.sort((a, b) {
+      final x = a.seriesNumber, y = b.seriesNumber;
+      if (x == null && y == null) return a.title.compareTo(b.title);
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return x.compareTo(y);
+    });
+    return found;
+  }
+
+  /// The book that comes after [book] in its series, if you have it.
+  Book? nextInSeries(Book book) {
+    final name = book.series;
+    final number = book.seriesNumber;
+    if (name == null || number == null) return null;
+    for (final other in booksInSeries(name)) {
+      final otherNumber = other.seriesNumber;
+      if (otherNumber != null && otherNumber > number) return other;
+    }
+    return null;
+  }
+
   // ---- bulk edits
 
   Future<void> moveAllTo(Set<String> ids, Shelf shelf) =>
@@ -245,6 +301,22 @@ class BookRepository extends ChangeNotifier {
       final has = book.tags.any((t) => t.toLowerCase() == clean.toLowerCase());
       return has ? book : book.copyWith(tags: [...book.tags, clean]);
     });
+  }
+
+  /// Puts earlier copies of books back, for undoing a bulk change.
+  Future<void> putBack(List<Book> earlier) async {
+    final byId = {for (final book in earlier) book.id: book};
+    final changed = <Book>[];
+    for (var i = 0; i < _books.length; i++) {
+      final old = byId[_books[i].id];
+      if (old != null) {
+        _books[i] = old;
+        changed.add(old);
+      }
+    }
+    if (changed.isEmpty) return;
+    notifyListeners();
+    await _store.saveAll(changed);
   }
 
   // ---- trash

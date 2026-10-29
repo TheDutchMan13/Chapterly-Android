@@ -1,21 +1,24 @@
 DateTime? _parse(Object? value) =>
     value is String ? DateTime.tryParse(value) : null;
 
-/// Pages read on one day.
+/// Pages read and minutes spent reading on one day. Either can be 0.
 class LogEntry {
-  const LogEntry({required this.date, required this.pages});
+  const LogEntry({required this.date, this.pages = 0, this.minutes = 0});
 
   final DateTime date;
   final int pages;
+  final int minutes;
 
   Map<String, Object?> toJson() => {
         'date': date.toIso8601String(),
         'pages': pages,
+        'minutes': minutes,
       };
 
   factory LogEntry.fromJson(Map<String, dynamic> json) => LogEntry(
         date: DateTime.parse(json['date'] as String),
-        pages: json['pages'] as int,
+        pages: (json['pages'] as int?) ?? 0,
+        minutes: (json['minutes'] as int?) ?? 0,
       );
 }
 

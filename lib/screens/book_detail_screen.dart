@@ -9,6 +9,8 @@ import '../models/book_format.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
+import 'book_card_screen.dart';
+import 'log_entry_dialog.dart';
 import 'similar_books_screen.dart';
 
 /// Shows one book. Change its shelf, format, rating, dates, pages, tags,
@@ -144,27 +146,91 @@ class BookDetailScreen extends StatelessWidget {
   }
 
   Future<void> _addLogEntry(BuildContext context, Book book) async {
-    final text = await _askText(
-      context,
-      title: 'Pages read today',
-      initial: '',
-      label: 'Pages',
-      keyboardType: TextInputType.number,
-      formatters: [FilteringTextInputFormatter.digitsOnly],
+    final amounts = await showLogEntryDialog(context);
+    if (amounts == null) return;
+    await repository.addLogEntry(
+      book.id,
+      DateTime.now(),
+      amounts.pages,
+      minutes: amounts.minutes,
     );
-    final pages = int.tryParse(text?.trim() ?? '');
-    if (pages == null || pages <= 0) return;
-    await repository.addLogEntry(book.id, DateTime.now(), pages);
   }
 
   Future<void> _readAgain(BuildContext context, Book book) async {
-    final confirmed = await showDialog<bool>(
+    var start = DateTime.now();
+    final chosen = await showDialog<DateTime>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Read again?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This reading is saved under "Earlier readings". The book '
+                'moves to In progress.',
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                icon: const Icon(Icons.event),
+                label: Text('Started ${formatDate(start)}'),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: start,
+                    firstDate: DateTime(1950),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setDialogState(() => start = picked);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(start),
+              child: const Text('Read again'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    await repository.readAgain(book.id, startedAt: chosen);
+  }
+
+  Future<void> _editSeries(BuildContext context, Book book) async {
+    final name = TextEditingController(text: book.series ?? '');
+    final number =
+        TextEditingController(text: book.seriesNumber?.toString() ?? '');
+    final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Read again?'),
-        content: const Text(
-          'This reading is saved under "Earlier readings". The book moves to '
-          'In progress with today as the start date.',
+        title: const Text('Series'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Series name',
+                helperText: 'Leave empty to remove',
+              ),
+            ),
+            TextField(
+              controller: number,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(labelText: 'Book number'),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -173,12 +239,41 @@ class BookDetailScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Read again'),
+            child: const Text('Save'),
           ),
         ],
       ),
     );
-    if (confirmed == true) await repository.readAgain(book.id);
+    final nameText = name.text;
+    final numberValue = int.tryParse(number.text.trim());
+    name.dispose();
+    number.dispose();
+    if (saved != true) return;
+    await repository.setSeries(
+      book.id,
+      nameText,
+      numberValue != null && numberValue > 0 ? numberValue : null,
+    );
+  }
+
+  void _openBook(BuildContext context, Book book) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BookDetailScreen(
+          repository: repository,
+          fileIo: fileIo,
+          bookId: book.id,
+        ),
+      ),
+    );
+  }
+
+  void _openCard(BuildContext context, Book book) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BookCardScreen(book: book, fileIo: fileIo),
+      ),
+    );
   }
 
   Future<void> _editCover(BuildContext context, Book book) async {
@@ -239,6 +334,7 @@ class BookDetailScreen extends StatelessWidget {
     BuildContext context, {
     required String title,
     required bool Function(Book) test,
+    int Function(Book, Book)? compare,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -247,6 +343,7 @@ class BookDetailScreen extends StatelessWidget {
           fileIo: fileIo,
           title: title,
           test: test,
+          compare: compare,
         ),
       ),
     );
@@ -276,6 +373,14 @@ class BookDetailScreen extends StatelessWidget {
     );
   }
 
+  String _logLine(LogEntry entry) {
+    final amounts = [
+      if (entry.pages > 0) '${entry.pages} pages',
+      if (entry.minutes > 0) formatMinutes(entry.minutes),
+    ].join(' · ');
+    return '${formatDate(entry.date)}: $amounts';
+  }
+
   String _readingSummary(Reading reading) {
     final started = reading.startedAt;
     final finished = reading.finishedAt;
@@ -299,11 +404,18 @@ class BookDetailScreen extends StatelessWidget {
         final textTheme = Theme.of(context).textTheme;
         final loggedPages =
             book.readingLog.fold<int>(0, (sum, entry) => sum + entry.pages);
+        final loggedMinutes =
+            book.readingLog.fold<int>(0, (sum, entry) => sum + entry.minutes);
         final author = book.author;
         return Scaffold(
           appBar: AppBar(
             title: const Text('Book'),
             actions: [
+              IconButton(
+                tooltip: 'Share a book card',
+                icon: const Icon(Icons.ios_share),
+                onPressed: () => _openCard(context, book),
+              ),
               IconButton(
                 tooltip: book.favorite
                     ? 'Remove from favorites'
@@ -422,6 +534,48 @@ class BookDetailScreen extends StatelessWidget {
                 subtitle: Text(book.pages?.toString() ?? 'Not set'),
                 onTap: () => _editPages(context, book),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.collections_bookmark_outlined),
+                title: const Text('Series'),
+                subtitle: Text(
+                  book.series == null
+                      ? 'Not set'
+                      : book.seriesNumber == null
+                          ? book.series!
+                          : '${book.series} #${book.seriesNumber}',
+                ),
+                onTap: () => _editSeries(context, book),
+              ),
+              if (book.series != null)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ActionChip(
+                      avatar: const Icon(Icons.list, size: 18),
+                      label: const Text('Show the series'),
+                      onPressed: () => _showSimilar(
+                        context,
+                        title: book.series!,
+                        test: (other) =>
+                            other.series?.trim().toLowerCase() ==
+                            book.series!.trim().toLowerCase(),
+                        compare: (a, b) =>
+                            (a.seriesNumber ?? 1 << 30)
+                                .compareTo(b.seriesNumber ?? 1 << 30),
+                      ),
+                    ),
+                    if (repository.nextInSeries(book) != null)
+                      ActionChip(
+                        avatar: const Icon(Icons.skip_next, size: 18),
+                        label: Text(
+                          'Next: ${repository.nextInSeries(book)!.title}',
+                        ),
+                        onPressed: () =>
+                            _openBook(context, repository.nextInSeries(book)!),
+                      ),
+                  ],
+                ),
               if (book.shelf == Shelf.finished)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -452,22 +606,27 @@ class BookDetailScreen extends StatelessWidget {
                   TextButton.icon(
                     onPressed: () => _addLogEntry(context, book),
                     icon: const Icon(Icons.add),
-                    label: const Text('Add pages'),
+                    label: const Text('Add to log'),
                   ),
                 ],
               ),
               if (book.readingLog.isEmpty)
-                const Text('Write down pages you read to see them in your statistics.')
+                const Text(
+                  'Write down pages or minutes you read to see them in your '
+                  'statistics.',
+                )
               else ...[
-                Text('$loggedPages pages logged'),
+                Text(
+                  [
+                    if (loggedPages > 0) '$loggedPages pages',
+                    if (loggedMinutes > 0) formatMinutes(loggedMinutes),
+                  ].join(' · '),
+                ),
                 for (var i = 0; i < book.readingLog.length; i++)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    title: Text(
-                      '${formatDate(book.readingLog[i].date)}: '
-                      '${book.readingLog[i].pages} pages',
-                    ),
+                    title: Text(_logLine(book.readingLog[i])),
                     trailing: IconButton(
                       tooltip: 'Remove entry',
                       icon: const Icon(Icons.clear),

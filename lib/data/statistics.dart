@@ -15,6 +15,7 @@ class BookStats {
     required this.shelfCounts,
     required this.finishedWithoutDate,
     required this.loggedPages,
+    required this.loggedMinutes,
     required this.loggedByMonth,
     required this.formatCounts,
   });
@@ -39,6 +40,9 @@ class BookStats {
 
   /// Pages written down in the reading log, in the chosen year or ever.
   final int loggedPages;
+
+  /// Minutes spent reading, from the reading log.
+  final int loggedMinutes;
 
   /// Logged pages per month (index 0 is January).
   final List<int> loggedByMonth;
@@ -94,6 +98,7 @@ BookStats computeStats(List<Book> books, {int? year}) {
   final sortedYears = yearCounts.keys.toList()..sort();
 
   var loggedPages = 0;
+  var loggedMinutes = 0;
   final loggedByMonth = List<int>.filled(12, 0);
   for (final book in books) {
     final entries = [
@@ -103,6 +108,7 @@ BookStats computeStats(List<Book> books, {int? year}) {
     for (final entry in entries) {
       if (year != null && entry.date.year != year) continue;
       loggedPages += entry.pages;
+      loggedMinutes += entry.minutes;
       loggedByMonth[entry.date.month - 1] += entry.pages;
     }
   }
@@ -125,7 +131,47 @@ BookStats computeStats(List<Book> books, {int? year}) {
     },
     finishedWithoutDate: withoutDate,
     loggedPages: loggedPages,
+    loggedMinutes: loggedMinutes,
     loggedByMonth: loggedByMonth,
     formatCounts: formatCounts,
   );
+}
+
+Iterable<LogEntry> _allLogEntries(List<Book> books) sync* {
+  for (final book in books) {
+    yield* book.readingLog;
+    for (final reading in book.previousReadings) {
+      yield* reading.log;
+    }
+  }
+}
+
+DateTime _day(DateTime date) => DateTime(date.year, date.month, date.day);
+
+/// Pages written in the reading log on [day].
+int pagesLoggedOn(List<Book> books, DateTime day) {
+  final target = _day(day);
+  var total = 0;
+  for (final entry in _allLogEntries(books)) {
+    if (_day(entry.date) == target) total += entry.pages;
+  }
+  return total;
+}
+
+/// How many days in a row (ending today, or yesterday if nothing is logged
+/// yet today) have something in the reading log.
+int currentStreak(List<Book> books, {DateTime? now}) {
+  final days = {
+    for (final entry in _allLogEntries(books))
+      if (entry.pages > 0 || entry.minutes > 0) _day(entry.date),
+  };
+  var day = _day(now ?? DateTime.now());
+  if (!days.contains(day)) day = DateTime(day.year, day.month, day.day - 1);
+  var streak = 0;
+  while (days.contains(day)) {
+    streak++;
+    // Calendar arithmetic, so daylight saving changes cannot skip a day.
+    day = DateTime(day.year, day.month, day.day - 1);
+  }
+  return streak;
 }

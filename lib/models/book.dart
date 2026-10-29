@@ -44,6 +44,8 @@ class Book {
     this.notes,
     this.deletedAt,
     this.coverPath,
+    this.series,
+    this.seriesNumber,
     this.readingLog = const [],
     this.previousReadings = const [],
   });
@@ -67,6 +69,10 @@ class Book {
 
   /// A cover picked from the phone. Wins over [coverUrl] when set.
   final String? coverPath;
+
+  /// The series this book belongs to, and its place in it (1, 2, 3...).
+  final String? series;
+  final int? seriesNumber;
 
   /// The current reading: 1 to 5 stars (or null), dates, and pages logged.
   final int? rating;
@@ -101,6 +107,8 @@ class Book {
     BookFormat? Function()? format,
     String? Function()? notes,
     String? Function()? coverPath,
+    String? Function()? series,
+    int? Function()? seriesNumber,
     DateTime? Function()? deletedAt,
     int? Function()? pages,
     int? Function()? rating,
@@ -126,6 +134,9 @@ class Book {
         notes: notes != null ? notes() : this.notes,
         deletedAt: deletedAt != null ? deletedAt() : this.deletedAt,
         coverPath: coverPath != null ? coverPath() : this.coverPath,
+        series: series != null ? series() : this.series,
+        seriesNumber:
+            seriesNumber != null ? seriesNumber() : this.seriesNumber,
         readingLog: readingLog ?? this.readingLog,
         previousReadings: previousReadings ?? this.previousReadings,
       );
@@ -150,6 +161,8 @@ class Book {
         'notes': notes,
         'deleted_at': deletedAt?.millisecondsSinceEpoch,
         'cover_path': coverPath,
+        'series': series,
+        'series_number': seriesNumber,
         'reading_log': jsonEncode([for (final e in readingLog) e.toJson()]),
         'previous_readings':
             jsonEncode([for (final r in previousReadings) r.toJson()]),
@@ -174,6 +187,8 @@ class Book {
         notes: map['notes'] as String?,
         deletedAt: _dateFromMillis(map['deleted_at']),
         coverPath: map['cover_path'] as String?,
+        series: map['series'] as String?,
+        seriesNumber: map['series_number'] as int?,
         readingLog: logEntriesFromJson(_decode(map['reading_log'])),
         previousReadings: readingsFromJson(_decode(map['previous_readings'])),
       );
@@ -198,6 +213,8 @@ class Book {
         'favorite': favorite,
         'notes': notes,
         'deletedAt': deletedAt?.toIso8601String(),
+        'series': series,
+        'seriesNumber': seriesNumber,
         'readingLog': [for (final e in readingLog) e.toJson()],
         'previousReadings': [for (final r in previousReadings) r.toJson()],
       };
@@ -222,6 +239,8 @@ class Book {
         favorite: json['favorite'] == true,
         notes: json['notes'] as String?,
         deletedAt: _dateFromIso(json['deletedAt']),
+        series: json['series'] as String?,
+        seriesNumber: json['seriesNumber'] as int?,
         readingLog: logEntriesFromJson(json['readingLog']),
         previousReadings: readingsFromJson(json['previousReadings']),
       );
