@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_settings.dart';
+import '../models/shelf.dart';
 
 /// Choose the order of the four main shelf tabs with the arrow buttons.
 class ShelfOrderScreen extends StatelessWidget {
