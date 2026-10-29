@@ -1,17 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../data/book_repository.dart';
 import '../models/shelf.dart';
 
-/// Returns a result map with title, author and shelf, or null if cancelled.
-Future<Map<String, Object>?> showAddBookDialog(BuildContext context) {
-  return showDialog<Map<String, Object>>(
+class NewBookData {
+  const NewBookData({
+    required this.title,
+    required this.author,
+    required this.shelf,
+    required this.tags,
+    this.isbn,
+    this.pages,
+  });
+
+  final String title;
+  final String author;
+  final Shelf shelf;
+  final List<String> tags;
+  final String? isbn;
+  final int? pages;
+}
+
+/// Returns the entered details, or null if the dialog was cancelled.
+/// Pass [isbn] (for example from a scan) to save it with the book.
+Future<NewBookData?> showAddBookDialog(BuildContext context, {String? isbn}) {
+  return showDialog<NewBookData>(
     context: context,
-    builder: (_) => const _AddBookDialog(),
+    builder: (_) => _AddBookDialog(isbn: isbn),
   );
 }
 
 class _AddBookDialog extends StatefulWidget {
-  const _AddBookDialog();
+  const _AddBookDialog({this.isbn});
+
+  final String? isbn;
 
   @override
   State<_AddBookDialog> createState() => _AddBookDialogState();
@@ -20,52 +43,85 @@ class _AddBookDialog extends StatefulWidget {
 class _AddBookDialogState extends State<_AddBookDialog> {
   final _title = TextEditingController();
   final _author = TextEditingController();
+  final _pages = TextEditingController();
+  final _tags = TextEditingController();
   Shelf _shelf = Shelf.forLater;
 
   @override
   void dispose() {
     _title.dispose();
     _author.dispose();
+    _pages.dispose();
+    _tags.dispose();
     super.dispose();
   }
 
   void _save() {
     final title = _title.text.trim();
     if (title.isEmpty) return;
-    Navigator.of(context).pop({
-      'title': title,
-      'author': _author.text.trim(),
-      'shelf': _shelf,
-    });
+    final pages = int.tryParse(_pages.text.trim());
+    Navigator.of(context).pop(
+      NewBookData(
+        title: title,
+        author: _author.text.trim(),
+        shelf: _shelf,
+        tags: parseTags(_tags.text),
+        isbn: widget.isbn,
+        pages: pages != null && pages > 0 ? pages : null,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isbn = widget.isbn;
     return AlertDialog(
       title: const Text('Add book'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _title,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Title'),
-          ),
-          TextField(
-            controller: _author,
-            decoration: const InputDecoration(labelText: 'Author'),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<Shelf>(
-            initialValue: _shelf,
-            decoration: const InputDecoration(labelText: 'Shelf'),
-            items: [
-              for (final shelf in Shelf.values)
-                DropdownMenuItem(value: shelf, child: Text(shelf.label)),
-            ],
-            onChanged: (value) => setState(() => _shelf = value ?? _shelf),
-          ),
-        ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isbn != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('ISBN $isbn'),
+              ),
+            TextField(
+              controller: _title,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: _author,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Author'),
+            ),
+            TextField(
+              controller: _pages,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(labelText: 'Pages (optional)'),
+            ),
+            TextField(
+              controller: _tags,
+              decoration: const InputDecoration(
+                labelText: 'Tags',
+                helperText: 'Separate with commas',
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<Shelf>(
+              initialValue: _shelf,
+              decoration: const InputDecoration(labelText: 'Shelf'),
+              items: [
+                for (final shelf in Shelf.values)
+                  DropdownMenuItem(value: shelf, child: Text(shelf.label)),
+              ],
+              onChanged: (value) => setState(() => _shelf = value ?? _shelf),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
