@@ -4,6 +4,10 @@ String _two(int n) => n.toString().padLeft(2, '0');
 String formatDate(DateTime date) =>
     '${date.year}-${_two(date.month)}-${_two(date.day)}';
 
+/// 2024-03-05 14:30
+String formatDateTime(DateTime date) =>
+    '${formatDate(date)} ${_two(date.hour)}:${_two(date.minute)}';
+
 /// Reads 2024-03-05, 2024/3/5 or a full ISO timestamp. Null if unreadable.
 DateTime? parseDate(String? text) {
   final value = text?.trim();

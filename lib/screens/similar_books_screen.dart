@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/file_io.dart';
 import '../models/book.dart';
@@ -13,6 +14,7 @@ class SimilarBooksScreen extends StatelessWidget {
   const SimilarBooksScreen({
     super.key,
     required this.repository,
+    required this.settings,
     required this.fileIo,
     required this.title,
     required this.test,
@@ -20,6 +22,7 @@ class SimilarBooksScreen extends StatelessWidget {
   });
 
   final BookRepository repository;
+  final AppSettings settings;
   final FileIo fileIo;
   final String title;
   final bool Function(Book book) test;
@@ -62,6 +65,7 @@ class SimilarBooksScreen extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) => BookDetailScreen(
                             repository: repository,
+                            settings: settings,
                             fileIo: fileIo,
                             bookId: book.id,
                           ),

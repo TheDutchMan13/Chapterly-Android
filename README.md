@@ -32,19 +32,36 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   favorites first
   (tap the same option again to flip the direction), and switch between list
   and grid. These choices are remembered
-- Statistics: books finished, pages read, pages and time logged, streak,
+- Reading pace: pages a day and an estimated finish date for books in progress
+- Statistics: ratings breakdown, most read authors and tags, books finished, pages read, pages and time logged, streak,
   averages, longest book, formats, books per month or per year, and a yearly
   and a monthly reading goal
 - Backup and restore: export your whole library as a JSON file and restore it
   (custom covers are files on the phone and are not part of the backup)
 - CSV export, and CSV import from Goodreads or a Chapterly CSV
 - Choose your accent colour and font (Settings > Appearance)
-- Light and dark theme (follows the phone)
+- Light, dark or phone-following theme, with an optional pure black dark mode
+- Backup reminder: a banner asks for a new backup after 2 weeks to 3 months
+  (your choice, or switch it off)
+- Sync with a PC on your home Wi-Fi (Settings > Sync with a PC). Off by
+  default. Works while Chapterly is open. Settings shows when the last sync
+  happened and what it did. The protocol is in `docs/SYNC.md`
+- Shelves of your own (Beach reads, Gifts...): extra tabs next to the four
+  main shelves; manage them from the menu, or add selected books to one
+- Quotes: save favourite passages from a book, with the page
+- Reading challenge: the yearly goal is a ring with books to go and whether
+  you are ahead of or behind pace
+- Year in review: a shareable picture of your year (Statistics > pick a year)
+- What should I read next?: a random pick from For later, optionally by tag
+  or format
+- Find duplicates: books that look the same are merged into one (with Undo)
+- More by this author: other books by the author from Open Library, leaving
+  out the ones you have
+- App lock: protect Chapterly with a PIN (Settings > Privacy). A forgotten PIN
+  can only be cleared by erasing the app data, so keep a backup
 
 ## Ideas for later
-- Home-screen widget
-- Reading reminders
-- More languages
+- Windows app to sync with (the phone side is ready; see docs/SYNC.md)
 
 ## Data and privacy
 No account, no ads, no tracking. The only network traffic is Open Library

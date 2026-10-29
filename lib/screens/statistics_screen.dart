@@ -4,9 +4,11 @@ import 'package:flutter/services.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/date_format.dart';
+import '../data/file_io.dart';
 import '../data/statistics.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
+import 'year_review_screen.dart';
 
 const _monthLetters = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
@@ -16,10 +18,12 @@ class StatisticsScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.settings,
+    required this.fileIo,
   });
 
   final BookRepository repository;
   final AppSettings settings;
+  final FileIo fileIo;
 
   @override
   State<StatisticsScreen> createState() => _StatisticsScreenState();
@@ -142,6 +146,64 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
+  List<Widget> _countSection(
+    String title,
+    List<MapEntry<String, int>> entries,
+  ) {
+    return [
+      const SizedBox(height: 24),
+      Text(title, style: Theme.of(context).textTheme.titleMedium),
+      for (final entry in entries)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Expanded(child: Text(entry.key)),
+              Text('${entry.value}'),
+            ],
+          ),
+        ),
+    ];
+  }
+
+  Widget _challengeRow(int year, int goal, int finished) {
+    final status = challengeStatus(
+      finished: finished,
+      goal: goal,
+      year: year,
+    );
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        SizedBox(
+          width: 88,
+          height: 88,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 88,
+                height: 88,
+                child: CircularProgressIndicator(
+                  value: status.progress,
+                  strokeWidth: 8,
+                ),
+              ),
+              Text(
+                '${status.finished}/${status.goal}',
+                style: textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(status.describe(), style: textTheme.bodyLarge),
+        ),
+      ],
+    );
+  }
+
   Widget _goalCard(int year, BookStats stats) {
     final goal = widget.settings.goalFor(year);
     final textTheme = Theme.of(context).textTheme;
@@ -155,13 +217,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             const SizedBox(height: 8),
             if (goal == null)
               const Text('No goal set for this year.')
-            else ...[
-              LinearProgressIndicator(
-                value: (stats.finishedCount / goal).clamp(0.0, 1.0).toDouble(),
-              ),
-              const SizedBox(height: 8),
-              Text('${stats.finishedCount} of $goal books'),
-            ],
+            else
+              _challengeRow(year, goal, stats.finishedCount),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -198,6 +255,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           final textTheme = Theme.of(context).textTheme;
           final streak = currentStreak(books);
           final pagesToday = pagesLoggedOn(books, DateTime.now());
+          final paces = [
+            for (final book in books)
+              if (readingPace(book) case final pace?) (book, pace),
+          ];
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -274,6 +335,20 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 _goalCard(year, stats),
                 const SizedBox(height: 12),
                 _monthlyGoalCard(year, stats),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.auto_awesome),
+                  label: Text('$year in review'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => YearReviewScreen(
+                        repository: widget.repository,
+                        fileIo: widget.fileIo,
+                        year: year,
+                      ),
+                    ),
+                  ),
+                ),
               ],
               if (year == null) ...[
                 const SizedBox(height: 24),
@@ -303,6 +378,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         ],
                       ),
                     ),
+              ],
+              if (stats.ratingCounts.values.any((count) => count > 0)) ...[
+                const SizedBox(height: 24),
+                Text('Ratings', style: textTheme.titleMedium),
+                const SizedBox(height: 8),
+                _BarChart(
+                  labels: const ['1★', '2★', '3★', '4★', '5★'],
+                  values: [
+                    for (var star = 1; star <= 5; star++)
+                      stats.ratingCounts[star] ?? 0,
+                  ],
+                ),
+              ],
+              if (stats.topAuthors.isNotEmpty)
+                ..._countSection('Most read authors', stats.topAuthors),
+              if (stats.topTags.isNotEmpty)
+                ..._countSection('Most used tags', stats.topTags),
+              if (paces.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Text('Reading pace', style: textTheme.titleMedium),
+                for (final (book, pace) in paces)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(book.title),
+                        Text(pace.describe(), style: textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
               ],
               const SizedBox(height: 24),
               if (year == null && overall.byYear.isNotEmpty) ...[

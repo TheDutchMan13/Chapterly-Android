@@ -7,10 +7,24 @@ abstract interface class BookStore {
   Future<void> saveAll(List<Book> books);
   Future<void> replaceAll(List<Book> books);
   Future<void> remove(String id);
+
+  /// Books removed for good, with the time they were removed. Kept so that a
+  /// sync does not bring them back from another device.
+  Future<Map<String, DateTime>> loadTombstones();
+  Future<void> saveTombstones(Map<String, DateTime> tombstones);
 }
 
 class InMemoryBookStore implements BookStore {
   final Map<String, Book> _books = {};
+  Map<String, DateTime> _tombstones = {};
+
+  @override
+  Future<Map<String, DateTime>> loadTombstones() async => {..._tombstones};
+
+  @override
+  Future<void> saveTombstones(Map<String, DateTime> tombstones) async {
+    _tombstones = {...tombstones};
+  }
 
   @override
   Future<List<Book>> loadAll() async => _books.values.toList();

@@ -6,7 +6,10 @@ import '../data/book_repository.dart';
 import '../data/csv.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
+import '../data/phone_sync.dart';
+import '../data/sync_server.dart';
 import '../data/theme_options.dart';
+import 'pin_dialogs.dart';
 
 /// Accent colour and font, backup and restore, and CSV import and export.
 class SettingsScreen extends StatefulWidget {
@@ -14,11 +17,13 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.settings,
+    required this.phoneSync,
     required this.fileIo,
   });
 
   final BookRepository repository;
   final AppSettings settings;
+  final PhoneSync phoneSync;
   final FileIo fileIo;
 
   @override
@@ -26,6 +31,73 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _setPin() async {
+    final pin = await askNewPin(context);
+    if (pin == null) return;
+    widget.settings.setPin(pin);
+  }
+
+  Future<void> _changePin() async {
+    if (!await confirmCurrentPin(context, widget.settings)) return;
+    if (!mounted) return;
+    await _setPin();
+  }
+
+  Future<void> _removePin() async {
+    if (!await confirmCurrentPin(context, widget.settings)) return;
+    widget.settings.clearPin();
+  }
+
+  Widget _lockSettings() {
+    final settings = widget.settings;
+    if (!settings.pinEnabled) {
+      return ListTile(
+        leading: const Icon(Icons.lock_outline),
+        title: const Text('App lock'),
+        subtitle: const Text('Ask for a PIN when Chapterly opens.'),
+        onTap: _setPin,
+      );
+    }
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.lock),
+          title: const Text('Change PIN'),
+          onTap: _changePin,
+        ),
+        ListTile(
+          leading: const Icon(Icons.lock_open),
+          title: const Text('Turn off app lock'),
+          onTap: _removePin,
+        ),
+        ListTile(
+          title: const Text('Lock after'),
+          trailing: DropdownButton<int>(
+            value: settings.lockAfterSeconds,
+            items: const [
+              DropdownMenuItem(value: 0, child: Text('Immediately')),
+              DropdownMenuItem(value: 30, child: Text('30 seconds')),
+              DropdownMenuItem(value: 60, child: Text('1 minute')),
+              DropdownMenuItem(value: 300, child: Text('5 minutes')),
+            ],
+            onChanged: (seconds) {
+              if (seconds != null) settings.setLockAfterSeconds(seconds);
+            },
+          ),
+        ),
+        const ListTile(
+          leading: Icon(Icons.info_outline),
+          title: Text('If you forget the PIN'),
+          subtitle: Text(
+            'The only way back in is clearing the app data, which erases '
+            'your library. Keep a backup. PC sync still answers while the '
+            'app is locked.',
+          ),
+        ),
+      ],
+    );
+  }
+
   bool _busy = false;
 
   void _say(String message) {
@@ -81,6 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mimeType: 'application/json',
           subject: 'Chapterly backup',
         );
+        widget.settings.markBackedUp();
       });
 
   Future<void> _restoreBackup() => _run(() async {
@@ -134,6 +207,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        label: Text('Phone'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        label: Text('Light'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        label: Text('Dark'),
+                      ),
+                    ],
+                    selected: {widget.settings.themeMode},
+                    onSelectionChanged: (choice) =>
+                        widget.settings.setThemeMode(choice.first),
+                  ),
+                ),
+                SwitchListTile(
+                  title: const Text('Pure black in dark mode'),
+                  subtitle: const Text(
+                    'True black instead of dark grey. Can save battery on '
+                    'OLED screens.',
+                  ),
+                  value: widget.settings.pureBlack,
+                  onChanged: widget.settings.setPureBlack,
+                ),
+                const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Wrap(
@@ -190,6 +295,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Replace your library with a backup file made by Chapterly.',
             ),
             onTap: _restoreBackup,
+          ),
+          const _SectionHeader('Backup reminder'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) {
+              final last = widget.settings.lastBackup;
+              return Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Remind me to back up'),
+                    subtitle: Text(
+                      last == null
+                          ? 'No backup made yet'
+                          : 'Last backup: ${formatDate(last)}',
+                    ),
+                    value: widget.settings.backupReminder,
+                    onChanged: widget.settings.setBackupReminder,
+                  ),
+                  if (widget.settings.backupReminder)
+                    ListTile(
+                      title: const Text('Remind me after'),
+                      trailing: DropdownButton<int>(
+                        value: widget.settings.backupDays,
+                        items: const [
+                          DropdownMenuItem(value: 14, child: Text('2 weeks')),
+                          DropdownMenuItem(value: 30, child: Text('1 month')),
+                          DropdownMenuItem(value: 60, child: Text('2 months')),
+                          DropdownMenuItem(value: 90, child: Text('3 months')),
+                        ],
+                        onChanged: (days) {
+                          if (days != null) widget.settings.setBackupDays(days);
+                        },
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const _SectionHeader('Privacy'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) => _lockSettings(),
+          ),
+          const _SectionHeader('Sync with a PC'),
+          ListenableBuilder(
+            listenable: Listenable.merge([widget.settings, widget.phoneSync]),
+            builder: (context, _) => _SyncSettings(
+              settings: widget.settings,
+              phoneSync: widget.phoneSync,
+            ),
           ),
           const _SectionHeader('Spreadsheet (CSV)'),
           ListTile(
@@ -248,6 +403,96 @@ class _AccentDot extends StatelessWidget {
               : null,
         ),
       ),
+    );
+  }
+}
+
+String _groupCode(String code) => [
+      for (var i = 0; i < code.length; i += 4)
+        code.substring(i, i + 4 > code.length ? code.length : i + 4),
+    ].join('-');
+
+class _SyncSettings extends StatelessWidget {
+  const _SyncSettings({required this.settings, required this.phoneSync});
+
+  final AppSettings settings;
+  final PhoneSync phoneSync;
+
+  String _lastSyncText() {
+    final error = settings.lastSyncError;
+    if (error != null) return 'Failed: $error';
+    final at = settings.lastSyncAt;
+    if (at == null) return 'Never';
+    final changed = settings.lastSyncChanged;
+    final what = changed == 0
+        ? 'nothing changed'
+        : '$changed ${changed == 1 ? 'book' : 'books'} changed';
+    return '${formatDateTime(at)} · $what';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = settings.syncCode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          title: const Text('Allow sync from my PC'),
+          subtitle: const Text(
+            'Only while Chapterly is open, on your home Wi-Fi. Off by default.',
+          ),
+          value: settings.syncEnabled,
+          onChanged: (value) async {
+            settings.setSyncEnabled(value);
+            await phoneSync.refresh();
+          },
+        ),
+        if (settings.syncEnabled) ...[
+          ListTile(
+            leading: const Icon(Icons.wifi),
+            title: const Text('Address'),
+            subtitle: FutureBuilder<List<String>>(
+              future: localAddresses(),
+              builder: (context, snapshot) {
+                final addresses = snapshot.data;
+                if (addresses == null) return const Text('Looking up...');
+                if (addresses.isEmpty) {
+                  return const Text('No Wi-Fi connection found.');
+                }
+                return Text(
+                  [for (final a in addresses) '$a:${phoneSync.port}'].join('\n'),
+                );
+              },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.pin_outlined),
+            title: const Text('Pairing code'),
+            subtitle: Text(code == null ? 'Not set' : _groupCode(code)),
+            trailing: TextButton(
+              onPressed: () async {
+                settings.setSyncCode(newSyncCode());
+                await phoneSync.refresh();
+              },
+              child: const Text('New code'),
+            ),
+          ),
+          ListTile(
+            leading: Icon(
+              phoneSync.running
+                  ? Icons.check_circle_outline
+                  : Icons.error_outline,
+            ),
+            title: Text(phoneSync.running ? 'Ready for your PC' : 'Not running'),
+            subtitle: phoneSync.error == null ? null : Text(phoneSync.error!),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Last sync'),
+            subtitle: Text(_lastSyncText()),
+          ),
+        ],
+      ],
     );
   }
 }

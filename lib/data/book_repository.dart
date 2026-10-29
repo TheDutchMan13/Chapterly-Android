@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import '../models/book.dart';
 import '../models/book_format.dart';
+import '../models/quote.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
 import 'book_store.dart';
+import 'duplicates.dart';
 
 /// Splits "sci-fi, Favorites,, sci-fi" into ["sci-fi", "Favorites"].
 /// Tags are trimmed, empty ones dropped, and duplicates (ignoring case) removed.
@@ -55,6 +57,7 @@ class BookRepository extends ChangeNotifier {
   final BookStore _store;
   final List<Book> _books = [];
   bool _isLoaded = false;
+  final Map<String, DateTime> _tombstones = {};
 
   bool get isLoaded => _isLoaded;
 
@@ -77,6 +80,9 @@ class BookRepository extends ChangeNotifier {
     books.sort((a, b) => b.addedAt.compareTo(a.addedAt));
     _books.clear();
     _books.addAll(books);
+    _tombstones
+      ..clear()
+      ..addAll(await _store.loadTombstones());
     _isLoaded = true;
     notifyListeners();
   }
@@ -101,6 +107,37 @@ class BookRepository extends ChangeNotifier {
               _matchesQuery(book, query))
             book,
       ];
+
+  /// Books on your own shelf [name] that are not in the trash. The filters
+  /// work as in [booksOn].
+  List<Book> booksInCollection(
+    String name, {
+    Set<String> tags = const {},
+    String query = '',
+    bool favoritesOnly = false,
+    Set<BookFormat> formats = const {},
+  }) =>
+      [
+        for (final book in _books)
+          if (book.deletedAt == null &&
+              book.collections.contains(name) &&
+              tags.every(book.tags.contains) &&
+              (!favoritesOnly || book.favorite) &&
+              (formats.isEmpty || formats.contains(book.format)) &&
+              _matchesQuery(book, query))
+            book,
+      ];
+
+  /// Names of your own shelves that have at least one book (not in the
+  /// trash), sorted alphabetically.
+  List<String> get collectionNamesInUse {
+    final names = <String>{};
+    for (final book in _books) {
+      if (book.deletedAt == null) names.addAll(book.collections);
+    }
+    return names.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
 
   /// Every tag in use on books that are not in the trash, sorted alphabetically.
   List<String> get allTags {
@@ -288,6 +325,105 @@ class BookRepository extends ChangeNotifier {
     return null;
   }
 
+  // ---- your own shelves
+
+  Future<void> setCollections(String id, List<String> names) =>
+      _update(id, (book) => book.copyWith(collections: names));
+
+  /// Puts every book in [ids] on the shelf [name].
+  Future<void> addToCollectionAll(Set<String> ids, String name) {
+    final clean = name.trim();
+    if (clean.isEmpty) return Future.value();
+    return _updateMany(ids, (book) {
+      final has = book.collections.any(
+        (c) => c.toLowerCase() == clean.toLowerCase(),
+      );
+      return has
+          ? book
+          : book.copyWith(collections: [...book.collections, clean]);
+    });
+  }
+
+  /// Renames a shelf on every book that is on it (trash included).
+  Future<void> renameCollection(String from, String to) {
+    final clean = to.trim();
+    if (clean.isEmpty) return Future.value();
+    final ids = {
+      for (final book in _books)
+        if (book.collections.contains(from)) book.id,
+    };
+    return _updateMany(ids, (book) {
+      final renamed = <String>[];
+      for (final name in book.collections) {
+        final next = name == from ? clean : name;
+        if (!renamed.any((n) => n.toLowerCase() == next.toLowerCase())) {
+          renamed.add(next);
+        }
+      }
+      return book.copyWith(collections: renamed);
+    });
+  }
+
+  /// Takes every book off the shelf [name]. The books themselves stay.
+  Future<void> deleteCollection(String name) {
+    final ids = {
+      for (final book in _books)
+        if (book.collections.contains(name)) book.id,
+    };
+    return _updateMany(
+      ids,
+      (book) => book.copyWith(
+        collections: [for (final n in book.collections) if (n != name) n],
+      ),
+    );
+  }
+
+  // ---- quotes
+
+  Future<void> addQuote(String id, String text, {int? page}) {
+    final clean = text.trim();
+    if (clean.isEmpty) return Future.value();
+    return _update(id, (book) {
+      final quote = Quote(
+        text: clean,
+        page: page != null && page > 0 ? page : null,
+        addedAt: DateTime.now(),
+      );
+      return book.copyWith(quotes: [...book.quotes, quote]);
+    });
+  }
+
+  Future<void> removeQuote(String id, int index) => _update(id, (book) {
+        final quotes = [...book.quotes];
+        if (index >= 0 && index < quotes.length) quotes.removeAt(index);
+        return book.copyWith(quotes: quotes);
+      });
+
+  // ---- duplicates
+
+  /// Groups of books in the library that look like the same book.
+  List<List<Book>> findDuplicates() => findDuplicateGroups(books);
+
+  /// Keeps the best book of [group] (with the others' details added) and
+  /// moves the rest to the trash.
+  Future<void> mergeDuplicates(List<Book> group) async {
+    if (group.length < 2) return;
+    final merged = mergeDuplicateGroup(group);
+    final others = {
+      for (final book in group)
+        if (book.id != merged.id) book.id,
+    };
+    final stamp = DateTime.now();
+    for (var i = 0; i < _books.length; i++) {
+      if (_books[i].id == merged.id) {
+        _books[i] = merged.copyWith(updatedAt: stamp);
+      }
+    }
+    notifyListeners();
+    await _store.save(_books.firstWhere((b) => b.id == merged.id));
+    await trashAll(others);
+  }
+
   // ---- bulk edits
 
   Future<void> moveAllTo(Set<String> ids, Shelf shelf) =>
@@ -310,8 +446,9 @@ class BookRepository extends ChangeNotifier {
     for (var i = 0; i < _books.length; i++) {
       final old = byId[_books[i].id];
       if (old != null) {
-        _books[i] = old;
-        changed.add(old);
+        final restored = old.copyWith(updatedAt: DateTime.now());
+        _books[i] = restored;
+        changed.add(restored);
       }
     }
     if (changed.isEmpty) return;
@@ -336,18 +473,49 @@ class BookRepository extends ChangeNotifier {
   /// Removes a book for good.
   Future<void> deleteForever(String id) async {
     _books.removeWhere((book) => book.id == id);
+    _tombstones[id] = DateTime.now();
     notifyListeners();
     await _store.remove(id);
+    await _store.saveTombstones(_tombstones);
   }
 
   Future<void> emptyTrash() async {
     final ids = [for (final b in _books) if (b.deletedAt != null) b.id];
     if (ids.isEmpty) return;
     _books.removeWhere((book) => book.deletedAt != null);
+    final now = DateTime.now();
+    for (final id in ids) {
+      _tombstones[id] = now;
+    }
     notifyListeners();
     for (final id in ids) {
       await _store.remove(id);
     }
+    await _store.saveTombstones(_tombstones);
+  }
+
+  // ---- sync
+
+  /// Every book (trash included) and the books removed for good.
+  ({List<Book> books, Map<String, DateTime> tombstones}) snapshot() =>
+      (books: List.of(_books), tombstones: Map.of(_tombstones));
+
+  /// Replaces the library with the result of a sync, and saves it.
+  Future<void> applySynced(
+    List<Book> books,
+    Map<String, DateTime> tombstones,
+  ) async {
+    final sorted = [...books]..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    _books
+      ..clear()
+      ..addAll(sorted);
+    _tombstones
+      ..clear()
+      ..addAll(tombstones);
+    _isLoaded = true;
+    notifyListeners();
+    await _store.replaceAll(sorted);
+    await _store.saveTombstones(Map.of(_tombstones));
   }
 
   // ---- import and restore
@@ -386,9 +554,10 @@ class BookRepository extends ChangeNotifier {
 
   Future<void> _updateMany(Set<String> ids, Book Function(Book) change) async {
     final changed = <Book>[];
+    final stamp = DateTime.now();
     for (var i = 0; i < _books.length; i++) {
       if (ids.contains(_books[i].id)) {
-        final updated = change(_books[i]);
+        final updated = change(_books[i]).copyWith(updatedAt: stamp);
         _books[i] = updated;
         changed.add(updated);
       }

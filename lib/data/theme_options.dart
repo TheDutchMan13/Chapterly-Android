@@ -42,10 +42,16 @@ const fontChoices = [
 ];
 
 /// The app theme for the chosen accent colour and font.
-ThemeData buildTheme(AppSettings settings, Brightness brightness) =>
-    ThemeData(
-      colorSchemeSeed: Color(settings.accent),
-      brightness: brightness,
-      fontFamily: settings.fontFamily,
-      useMaterial3: true,
-    );
+ThemeData buildTheme(AppSettings settings, Brightness brightness) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: Color(settings.accent),
+    brightness: brightness,
+  );
+  final black = brightness == Brightness.dark && settings.pureBlack;
+  return ThemeData(
+    colorScheme: black ? scheme.copyWith(surface: Colors.black) : scheme,
+    scaffoldBackgroundColor: black ? Colors.black : null,
+    fontFamily: settings.fontFamily,
+    useMaterial3: true,
+  );
+}

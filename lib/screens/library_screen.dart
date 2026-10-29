@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/book_sorting.dart';
+import '../data/collections.dart';
 import '../data/file_io.dart';
 import '../data/open_library_client.dart';
+import '../data/phone_sync.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
 import 'add_book_dialog.dart';
 import 'book_detail_screen.dart';
+import 'duplicates_screen.dart';
+import 'manage_shelves_screen.dart';
+import 'read_next_screen.dart';
 import 'scan_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
@@ -26,12 +31,14 @@ class LibraryScreen extends StatefulWidget {
     required this.repository,
     required this.client,
     required this.settings,
+    required this.phoneSync,
     required this.fileIo,
   });
 
   final BookRepository repository;
   final OpenLibraryClient client;
   final AppSettings settings;
+  final PhoneSync phoneSync;
   final FileIo fileIo;
 
   @override
@@ -151,6 +158,92 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  void _openReadNext() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReadNextScreen(
+          repository: widget.repository,
+          settings: widget.settings,
+          fileIo: widget.fileIo,
+        ),
+      ),
+    );
+  }
+
+  void _openDuplicates() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DuplicatesScreen(repository: widget.repository),
+      ),
+    );
+  }
+
+  void _openShelves() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ManageShelvesScreen(
+          repository: widget.repository,
+          settings: widget.settings,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addSelectedToShelf() async {
+    final names = allCollectionNames(widget.settings, widget.repository);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Add to shelf'),
+        children: [
+          for (final name in names)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(name),
+              child: Text(name),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(''),
+            child: const Text('New shelf...'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    var name = choice;
+    if (name.isEmpty) {
+      final controller = TextEditingController();
+      final typed = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('New shelf'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Shelf name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (typed == null || typed.trim().isEmpty || !mounted) return;
+      name = typed.trim();
+      widget.settings.addCollection(name);
+    }
+    await widget.repository.addToCollectionAll({..._selected}, name);
+    if (mounted) setState(_selected.clear);
+  }
+
   void _openTrash() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -170,6 +263,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       MaterialPageRoute<void>(
         builder: (_) => BookDetailScreen(
           repository: widget.repository,
+          settings: widget.settings,
           fileIo: widget.fileIo,
           bookId: book.id,
         ),
@@ -183,6 +277,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         builder: (_) => StatisticsScreen(
           repository: widget.repository,
           settings: widget.settings,
+          fileIo: widget.fileIo,
         ),
       ),
     );
@@ -194,6 +289,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         builder: (_) => SettingsScreen(
           repository: widget.repository,
           settings: widget.settings,
+          phoneSync: widget.phoneSync,
           fileIo: widget.fileIo,
         ),
       ),
@@ -309,6 +405,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  Widget _list(List<Book> books) => _ShelfList(
+        books: sortBooks(
+          books,
+          widget.settings.sortField,
+          ascending: widget.settings.ascending,
+        ),
+        display: widget.settings.display,
+        filtering: _filtering,
+        selected: _selected,
+        onOpen: (book) =>
+            _selected.isEmpty ? _openBook(book) : _toggleSelected(book),
+        onSelect: _toggleSelected,
+        onMove: widget.repository.moveTo,
+      );
+
+  List<String> get _collections =>
+      allCollectionNames(widget.settings, widget.repository);
+
   String _sortLabel(SortField field) {
     if (field != widget.settings.sortField) return field.label;
     return '${field.label} ${widget.settings.ascending ? '↑' : '↓'}';
@@ -333,6 +447,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             tooltip: 'Add a tag',
             icon: const Icon(Icons.label_outline),
             onPressed: _tagSelected,
+          ),
+          IconButton(
+            tooltip: 'Add to a shelf of your own',
+            icon: const Icon(Icons.playlist_add),
+            onPressed: _addSelectedToShelf,
           ),
           IconButton(
             tooltip: 'Move to trash',
@@ -410,6 +529,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
               value: _openStatistics,
               child: const Text('Statistics'),
             ),
+            PopupMenuItem(
+              value: _openReadNext,
+              child: const Text('What should I read next?'),
+            ),
+            PopupMenuItem(
+              value: _openShelves,
+              child: const Text('Your shelves'),
+            ),
+            PopupMenuItem(
+              value: _openDuplicates,
+              child: const Text('Find duplicates'),
+            ),
             PopupMenuItem(value: _openTrash, child: const Text('Trash')),
             PopupMenuItem(
               value: _openSettings,
@@ -427,7 +558,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.settings, widget.repository]),
       builder: (context, _) => DefaultTabController(
-        length: Shelf.values.length,
+        key: ValueKey(_collections.length),
+        length: Shelf.values.length + _collections.length,
         child: PopScope(
           canPop: _selected.isEmpty && !_searching,
           onPopInvokedWithResult: (didPop, _) {
@@ -448,6 +580,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       text: '${shelf.label} '
                           '(${widget.repository.booksOn(shelf).length})',
                     ),
+                  for (final name in _collections)
+                    Tab(
+                      text: '$name '
+                          '(${widget.repository.booksInCollection(name).length})',
+                    ),
                 ],
               ),
             ),
@@ -466,6 +603,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 });
                 return Column(
                   children: [
+                    if (widget.settings.backupDue(
+                      bookCount: widget.repository.books.length,
+                    ))
+                      MaterialBanner(
+                        content: const Text(
+                          'It has been a while since your last backup.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                widget.settings.snoozeBackupReminder(),
+                            child: const Text('Later'),
+                          ),
+                          TextButton(
+                            onPressed: _openSettings,
+                            child: const Text('Back up'),
+                          ),
+                        ],
+                      ),
                     _FilterBar(
                       chips: [
                         FilterChip(
@@ -493,26 +649,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       child: TabBarView(
                         children: [
                           for (final shelf in Shelf.values)
-                            _ShelfList(
-                              books: sortBooks(
-                                widget.repository.booksOn(
-                                  shelf,
-                                  tags: _selectedTags,
-                                  query: _searchController.text,
-                                  favoritesOnly: _favoritesOnly,
-                                  formats: _formats,
-                                ),
-                                widget.settings.sortField,
-                                ascending: widget.settings.ascending,
+                            _list(
+                              widget.repository.booksOn(
+                                shelf,
+                                tags: _selectedTags,
+                                query: _searchController.text,
+                                favoritesOnly: _favoritesOnly,
+                                formats: _formats,
                               ),
-                              display: widget.settings.display,
-                              filtering: _filtering,
-                              selected: _selected,
-                              onOpen: (book) => _selected.isEmpty
-                                  ? _openBook(book)
-                                  : _toggleSelected(book),
-                              onSelect: _toggleSelected,
-                              onMove: widget.repository.moveTo,
+                            ),
+                          for (final name in _collections)
+                            _list(
+                              widget.repository.booksInCollection(
+                                name,
+                                tags: _selectedTags,
+                                query: _searchController.text,
+                                favoritesOnly: _favoritesOnly,
+                                formats: _formats,
+                              ),
                             ),
                         ],
                       ),

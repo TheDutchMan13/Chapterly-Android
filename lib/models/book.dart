@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'book_format.dart';
+import 'quote.dart';
 import 'reading.dart';
 import 'shelf.dart';
 
@@ -22,10 +23,13 @@ DateTime? _dateFromIso(Object? value) =>
 BookFormat? _formatFromName(Object? value) =>
     value is String ? BookFormat.values.asNameMap()[value] : null;
 
+List<String> _stringList(Object? value) =>
+    value is List ? [for (final item in value) item.toString()] : const [];
+
 Object? _decode(Object? text) => text is String ? jsonDecode(text) : null;
 
 class Book {
-  const Book({
+  Book({
     required this.id,
     required this.title,
     required this.author,
@@ -48,9 +52,16 @@ class Book {
     this.seriesNumber,
     this.readingLog = const [],
     this.previousReadings = const [],
-  });
+    this.collections = const [],
+    this.quotes = const [],
+    DateTime? updatedAt,
+  }) : updatedAt = updatedAt ?? addedAt;
 
   final String id;
+
+  /// When this book last changed. Used to merge changes made on two devices:
+  /// the newer copy wins.
+  final DateTime updatedAt;
   final String title;
   final String author;
   final Shelf shelf;
@@ -83,6 +94,13 @@ class Book {
   /// Earlier readings, oldest first. Each one counts as a finished read.
   final List<Reading> previousReadings;
 
+  /// Your own shelves (for example "Book club") this book is on, as well as
+  /// its reading shelf.
+  final List<String> collections;
+
+  /// Passages saved from this book.
+  final List<Quote> quotes;
+
   Reading get currentReading => Reading(
         startedAt: startedAt,
         finishedAt: finishedAt,
@@ -104,6 +122,11 @@ class Book {
     bool? favorite,
     List<LogEntry>? readingLog,
     List<Reading>? previousReadings,
+    List<String>? collections,
+    List<Quote>? quotes,
+    String? Function()? isbn,
+    String? Function()? coverUrl,
+    int? Function()? firstPublishYear,
     BookFormat? Function()? format,
     String? Function()? notes,
     String? Function()? coverPath,
@@ -114,6 +137,7 @@ class Book {
     int? Function()? rating,
     DateTime? Function()? startedAt,
     DateTime? Function()? finishedAt,
+    DateTime? updatedAt,
   }) =>
       Book(
         id: id,
@@ -122,9 +146,11 @@ class Book {
         shelf: shelf ?? this.shelf,
         addedAt: addedAt,
         tags: tags ?? this.tags,
-        isbn: isbn,
-        coverUrl: coverUrl,
-        firstPublishYear: firstPublishYear,
+        isbn: isbn != null ? isbn() : this.isbn,
+        coverUrl: coverUrl != null ? coverUrl() : this.coverUrl,
+        firstPublishYear: firstPublishYear != null
+            ? firstPublishYear()
+            : this.firstPublishYear,
         pages: pages != null ? pages() : this.pages,
         rating: rating != null ? rating() : this.rating,
         startedAt: startedAt != null ? startedAt() : this.startedAt,
@@ -139,6 +165,9 @@ class Book {
             seriesNumber != null ? seriesNumber() : this.seriesNumber,
         readingLog: readingLog ?? this.readingLog,
         previousReadings: previousReadings ?? this.previousReadings,
+        collections: collections ?? this.collections,
+        quotes: quotes ?? this.quotes,
+        updatedAt: updatedAt ?? this.updatedAt,
       );
 
   /// Column values for the SQLite `books` table.
@@ -166,6 +195,9 @@ class Book {
         'reading_log': jsonEncode([for (final e in readingLog) e.toJson()]),
         'previous_readings':
             jsonEncode([for (final r in previousReadings) r.toJson()]),
+        'collections': jsonEncode(collections),
+        'quotes': jsonEncode([for (final q in quotes) q.toJson()]),
+        'updated_at': updatedAt.millisecondsSinceEpoch,
       };
 
   factory Book.fromMap(Map<String, Object?> map) => Book(
@@ -191,6 +223,9 @@ class Book {
         seriesNumber: map['series_number'] as int?,
         readingLog: logEntriesFromJson(_decode(map['reading_log'])),
         previousReadings: readingsFromJson(_decode(map['previous_readings'])),
+        collections: _stringList(_decode(map['collections'])),
+        quotes: quotesFromJson(_decode(map['quotes'])),
+        updatedAt: _dateFromMillis(map['updated_at']),
       );
 
   /// Readable JSON used in backup files. Custom covers from the phone are not
@@ -217,6 +252,9 @@ class Book {
         'seriesNumber': seriesNumber,
         'readingLog': [for (final e in readingLog) e.toJson()],
         'previousReadings': [for (final r in previousReadings) r.toJson()],
+        'collections': collections,
+        'quotes': [for (final q in quotes) q.toJson()],
+        'updatedAt': updatedAt.toIso8601String(),
       };
 
   factory Book.fromJson(Map<String, dynamic> json) => Book(
@@ -243,5 +281,8 @@ class Book {
         seriesNumber: json['seriesNumber'] as int?,
         readingLog: logEntriesFromJson(json['readingLog']),
         previousReadings: readingsFromJson(json['previousReadings']),
+        collections: _stringList(json['collections']),
+        quotes: quotesFromJson(json['quotes']),
+        updatedAt: _dateFromIso(json['updatedAt']),
       );
 }

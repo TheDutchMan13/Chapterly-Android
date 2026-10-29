@@ -33,7 +33,17 @@ class SqliteBookStore implements BookStore {
       series TEXT,
       series_number INTEGER,
       reading_log TEXT,
-      previous_readings TEXT
+      previous_readings TEXT,
+      updated_at INTEGER,
+      collections TEXT,
+      quotes TEXT
+    )
+  ''';
+
+  static const _createTombstonesTable = '''
+    CREATE TABLE tombstones (
+      id TEXT PRIMARY KEY,
+      deleted_at INTEGER NOT NULL
     )
   ''';
 
@@ -41,8 +51,11 @@ class SqliteBookStore implements BookStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'chapterly.db'),
-      version: 4,
-      onCreate: (db, version) => db.execute(_createBooksTable),
+      version: 6,
+      onCreate: (db, version) async {
+        await db.execute(_createBooksTable);
+        await db.execute(_createTombstonesTable);
+      },
       onUpgrade: (db, oldVersion, newVersion) async {
         // Version 2 added pages, rating and reading dates.
         if (oldVersion < 2) {
@@ -72,6 +85,20 @@ class SqliteBookStore implements BookStore {
           await db.execute(
             'ALTER TABLE books ADD COLUMN series_number INTEGER',
           );
+        }
+        // Version 5 added the last-changed time (for sync) and the list of
+        // permanently deleted books.
+        if (oldVersion < 5) {
+          await db.execute('ALTER TABLE books ADD COLUMN updated_at INTEGER');
+          await db.execute(
+            'UPDATE books SET updated_at = added_at WHERE updated_at IS NULL',
+          );
+          await db.execute(_createTombstonesTable);
+        }
+        // Version 6 added your own shelves and saved quotes.
+        if (oldVersion < 6) {
+          await db.execute('ALTER TABLE books ADD COLUMN collections TEXT');
+          await db.execute('ALTER TABLE books ADD COLUMN quotes TEXT');
         }
       },
     );
@@ -121,5 +148,31 @@ class SqliteBookStore implements BookStore {
   @override
   Future<void> remove(String id) async {
     await _db.delete('books', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<Map<String, DateTime>> loadTombstones() async {
+    final rows = await _db.query('tombstones');
+    return {
+      for (final row in rows)
+        row['id'] as String: DateTime.fromMillisecondsSinceEpoch(
+          row['deleted_at'] as int,
+        ),
+    };
+  }
+
+  @override
+  Future<void> saveTombstones(Map<String, DateTime> tombstones) async {
+    await _db.transaction((txn) async {
+      await txn.delete('tombstones');
+      final batch = txn.batch();
+      for (final entry in tombstones.entries) {
+        batch.insert('tombstones', {
+          'id': entry.key,
+          'deleted_at': entry.value.millisecondsSinceEpoch,
+        });
+      }
+      await batch.commit(noResult: true);
+    });
   }
 }

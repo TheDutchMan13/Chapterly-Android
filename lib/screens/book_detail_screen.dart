@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/app_settings.dart';
 import '../data/book_repository.dart';
+import '../data/collections.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
+import '../data/open_library_client.dart';
+import '../data/statistics.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
+import 'author_books_screen.dart';
 import 'book_card_screen.dart';
 import 'log_entry_dialog.dart';
 import 'similar_books_screen.dart';
@@ -19,11 +24,13 @@ class BookDetailScreen extends StatelessWidget {
   const BookDetailScreen({
     super.key,
     required this.repository,
+    required this.settings,
     required this.fileIo,
     required this.bookId,
   });
 
   final BookRepository repository;
+  final AppSettings settings;
   final FileIo fileIo;
   final String bookId;
 
@@ -261,6 +268,7 @@ class BookDetailScreen extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => BookDetailScreen(
           repository: repository,
+          settings: settings,
           fileIo: fileIo,
           bookId: book.id,
         ),
@@ -340,10 +348,111 @@ class BookDetailScreen extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => SimilarBooksScreen(
           repository: repository,
+          settings: settings,
           fileIo: fileIo,
           title: title,
           test: test,
           compare: compare,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addQuote(BuildContext context, Book book) async {
+    final text = TextEditingController();
+    final page = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add a quote'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: text,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 8,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Quote'),
+              ),
+              TextField(
+                controller: page,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Page (optional)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final quoteText = text.text;
+    final pageNumber = int.tryParse(page.text.trim());
+    text.dispose();
+    page.dispose();
+    if (saved != true) return;
+    await repository.addQuote(book.id, quoteText, page: pageNumber);
+  }
+
+  Future<void> _newShelf(BuildContext context, Book book) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('New shelf'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Shelf name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final clean = name?.trim() ?? '';
+    if (clean.isEmpty) return;
+    settings.addCollection(clean);
+    await repository.addToCollectionAll({book.id}, clean);
+  }
+
+  Future<void> _toggleShelf(Book book, String name, {required bool on}) {
+    final names = [
+      for (final c in book.collections)
+        if (c != name) c,
+      if (on) name,
+    ];
+    return repository.setCollections(book.id, names);
+  }
+
+  void _openAuthorBooks(BuildContext context, String author) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AuthorBooksScreen(
+          repository: repository,
+          client: OpenLibraryClient(),
+          author: author,
         ),
       ),
     );
@@ -407,6 +516,7 @@ class BookDetailScreen extends StatelessWidget {
         final loggedMinutes =
             book.readingLog.fold<int>(0, (sum, entry) => sum + entry.minutes);
         final author = book.author;
+        final pace = readingPace(book);
         return Scaffold(
           appBar: AppBar(
             title: const Text('Book'),
@@ -476,6 +586,16 @@ class BookDetailScreen extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.person_outline),
                     label: Text(author),
+                  ),
+                ),
+              if (author.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                    onPressed: () => _openAuthorBooks(context, author),
+                    icon: const Icon(Icons.travel_explore),
+                    label: const Text('More by this author online'),
                   ),
                 ),
               if (book.firstPublishYear != null)
@@ -622,6 +742,7 @@ class BookDetailScreen extends StatelessWidget {
                     if (loggedMinutes > 0) formatMinutes(loggedMinutes),
                   ].join(' · '),
                 ),
+                if (pace != null) Text('Pace: ${pace.describe()}'),
                 for (var i = 0; i < book.readingLog.length; i++)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -681,6 +802,61 @@ class BookDetailScreen extends StatelessWidget {
                       ),
                   ],
                 ),
+              const SizedBox(height: 16),
+              Text('Shelves', style: textTheme.titleMedium),
+              ListenableBuilder(
+                listenable: settings,
+                builder: (context, _) => Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final name in {
+                      ...allCollectionNames(settings, repository),
+                      ...book.collections,
+                    })
+                      FilterChip(
+                        label: Text(name),
+                        selected: book.collections.contains(name),
+                        onSelected: (on) => _toggleShelf(book, name, on: on),
+                      ),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text('New shelf'),
+                      onPressed: () => _newShelf(context, book),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text('Quotes', style: textTheme.titleMedium),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () => _addQuote(context, book),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+              if (book.quotes.isEmpty)
+                const Text('No quotes saved yet.')
+              else
+                for (var i = 0; i < book.quotes.length; i++)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      '\u201c${book.quotes[i].text}\u201d',
+                      style: const TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                    subtitle: book.quotes[i].page == null
+                        ? null
+                        : Text('Page ${book.quotes[i].page}'),
+                    trailing: IconButton(
+                      tooltip: 'Remove quote',
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => repository.removeQuote(book.id, i),
+                    ),
+                  ),
             ],
           ),
         );
