@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/statistics.dart';
+import '../models/book_format.dart';
 import '../models/shelf.dart';
 
 const _monthLetters = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -155,6 +156,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     label: 'Average pages',
                     value: stats.averagePages?.toString() ?? '–',
                   ),
+                  if (stats.loggedPages > 0)
+                    _StatTile(
+                      label: 'Pages in reading log',
+                      value: stats.loggedPages.toString(),
+                    ),
                   if (longest != null)
                     _StatTile(
                       label: 'Longest book',
@@ -181,6 +187,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     ),
                   ),
               ],
+              if (stats.formatCounts.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Text('By format', style: textTheme.titleMedium),
+                for (final format in BookFormat.values)
+                  if (stats.formatCounts.containsKey(format))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(format.label)),
+                          Text('${stats.formatCounts[format]}'),
+                        ],
+                      ),
+                    ),
+              ],
               const SizedBox(height: 24),
               if (year == null && overall.byYear.isNotEmpty) ...[
                 Text('Books finished per year', style: textTheme.titleMedium),
@@ -196,6 +217,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
                 const SizedBox(height: 8),
                 _BarChart(labels: _monthLetters, values: stats.byMonth),
+                if (stats.loggedPages > 0) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Pages logged per month in $year',
+                    style: textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _BarChart(labels: _monthLetters, values: stats.loggedByMonth),
+                ],
               ],
               if (overall.finishedWithoutDate > 0) ...[
                 const SizedBox(height: 24),

@@ -1,4 +1,5 @@
 import '../models/book.dart';
+import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'book_repository.dart' show parseTags;
 import 'date_format.dart';
@@ -16,6 +17,9 @@ const csvColumns = [
   'First Published',
   'Date Added',
   'Cover URL',
+  'Format',
+  'Favorite',
+  'Notes',
 ];
 
 String _csvCell(String value) {
@@ -45,6 +49,9 @@ String encodeBooksCsv(List<Book> books) {
       book.firstPublishYear?.toString() ?? '',
       formatDate(book.addedAt),
       book.coverUrl ?? '',
+      book.format?.label ?? '',
+      book.favorite ? 'yes' : '',
+      book.notes ?? '',
     ];
     lines.add(cells.map(_csvCell).join(','));
   }
@@ -183,6 +190,9 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
   final yearColumns = find(['first published', 'original publication year']);
   final addedColumns = find(['date added']);
   final coverColumns = find(['cover url']);
+  final formatColumns = find(['format', 'binding']);
+  final favoriteColumns = find(['favorite', 'favourite']);
+  final notesColumns = find(['notes', 'my review']);
 
   final books = <Book>[];
   var skipped = 0;
@@ -195,7 +205,7 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
     }
     final cover = _cell(row, coverColumns);
     books.add(Book(
-      id: '${timestamp.microsecondsSinceEpoch}-$i',
+      id: newBookId(),
       title: title,
       author: _cell(row, authorColumns),
       shelf: _shelfFrom(_cell(row, shelfColumns)),
@@ -208,6 +218,12 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
       rating: _parseRating(_cell(row, ratingColumns)),
       startedAt: parseDate(_cell(row, startedColumns)),
       finishedAt: parseDate(_cell(row, finishedColumns)),
+      format: parseBookFormat(_cell(row, formatColumns)),
+      favorite: const {'yes', 'true', '1', 'x'}
+          .contains(_cell(row, favoriteColumns).toLowerCase()),
+      notes: _cell(row, notesColumns).isEmpty
+          ? null
+          : _cell(row, notesColumns),
     ));
   }
   return CsvImportResult(books: books, skipped: skipped);

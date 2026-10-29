@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/book_repository.dart';
+import '../models/book_format.dart';
 import '../models/shelf.dart';
 
 class NewBookData {
@@ -12,6 +13,7 @@ class NewBookData {
     required this.tags,
     this.isbn,
     this.pages,
+    this.format,
   });
 
   final String title;
@@ -20,6 +22,7 @@ class NewBookData {
   final List<String> tags;
   final String? isbn;
   final int? pages;
+  final BookFormat? format;
 }
 
 /// Returns the entered details, or null if the dialog was cancelled.
@@ -46,6 +49,7 @@ class _AddBookDialogState extends State<_AddBookDialog> {
   final _pages = TextEditingController();
   final _tags = TextEditingController();
   Shelf _shelf = Shelf.forLater;
+  BookFormat? _format;
 
   @override
   void dispose() {
@@ -68,6 +72,7 @@ class _AddBookDialogState extends State<_AddBookDialog> {
         tags: parseTags(_tags.text),
         isbn: widget.isbn,
         pages: pages != null && pages > 0 ? pages : null,
+        format: _format,
       ),
     );
   }
@@ -119,6 +124,17 @@ class _AddBookDialogState extends State<_AddBookDialog> {
                   DropdownMenuItem(value: shelf, child: Text(shelf.label)),
               ],
               onChanged: (value) => setState(() => _shelf = value ?? _shelf),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<BookFormat?>(
+              initialValue: _format,
+              decoration: const InputDecoration(labelText: 'Format'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Not set')),
+                for (final format in BookFormat.values)
+                  DropdownMenuItem(value: format, child: Text(format.label)),
+              ],
+              onChanged: (value) => setState(() => _format = value),
             ),
           ],
         ),

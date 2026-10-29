@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_settings.dart';
 import '../data/backup.dart';
 import '../data/book_repository.dart';
 import '../data/csv.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
+import '../data/theme_options.dart';
 
-/// Backup and restore, and CSV import and export.
+/// Accent colour and font, backup and restore, and CSV import and export.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.repository,
+    required this.settings,
     required this.fileIo,
   });
 
   final BookRepository repository;
+  final AppSettings settings;
   final FileIo fileIo;
 
   @override
@@ -73,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _exportBackup() => _run(() async {
         await widget.fileIo.shareText(
           fileName: 'chapterly-backup-${formatDate(DateTime.now())}.json',
-          content: encodeBackup(widget.repository.books),
+          content: encodeBackup(widget.repository.allBooks),
           mimeType: 'application/json',
           subject: 'Chapterly backup',
         );
@@ -124,6 +128,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         children: [
           if (_busy) const LinearProgressIndicator(),
+          const _SectionHeader('Appearance'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final choice in accentChoices)
+                        _AccentDot(
+                          choice: choice,
+                          selected:
+                              choice.color.toARGB32() == widget.settings.accent,
+                          onTap: () => widget.settings
+                              .setAccent(choice.color.toARGB32()),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                RadioGroup<String>(
+                  groupValue: widget.settings.fontFamily ?? '',
+                  onChanged: (value) => widget.settings.setFontFamily(
+                    value == null || value.isEmpty ? null : value,
+                  ),
+                  child: Column(
+                    children: [
+                      for (final font in fontChoices)
+                        RadioListTile<String>(
+                          value: font.family ?? '',
+                          title: Text(
+                            font.label,
+                            style: TextStyle(fontFamily: font.family),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           const _SectionHeader('Backup'),
           ListTile(
             leading: const Icon(Icons.upload_file),
@@ -168,6 +217,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccentDot extends StatelessWidget {
+  const _AccentDot({
+    required this.choice,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AccentChoice choice;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: choice.name,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: CircleAvatar(
+          backgroundColor: choice.color,
+          radius: 20,
+          child: selected
+              ? const Icon(Icons.check, color: Colors.white)
+              : null,
+        ),
       ),
     );
   }

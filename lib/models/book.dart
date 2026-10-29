@@ -1,12 +1,28 @@
 import 'dart:convert';
 
+import 'book_format.dart';
+import 'reading.dart';
 import 'shelf.dart';
+
+int _idSequence = 0;
+
+/// A new id that is unique even when several books are added in the same
+/// microsecond (which can happen on Windows and in tests).
+String newBookId() {
+  _idSequence++;
+  return '${DateTime.now().microsecondsSinceEpoch}-$_idSequence';
+}
 
 DateTime? _dateFromMillis(Object? value) =>
     value is int ? DateTime.fromMillisecondsSinceEpoch(value) : null;
 
 DateTime? _dateFromIso(Object? value) =>
     value is String ? DateTime.tryParse(value) : null;
+
+BookFormat? _formatFromName(Object? value) =>
+    value is String ? BookFormat.values.asNameMap()[value] : null;
+
+Object? _decode(Object? text) => text is String ? jsonDecode(text) : null;
 
 class Book {
   const Book({
@@ -23,6 +39,13 @@ class Book {
     this.rating,
     this.startedAt,
     this.finishedAt,
+    this.format,
+    this.favorite = false,
+    this.notes,
+    this.deletedAt,
+    this.coverPath,
+    this.readingLog = const [],
+    this.previousReadings = const [],
   });
 
   final String id;
@@ -35,17 +58,50 @@ class Book {
   final String? coverUrl;
   final int? firstPublishYear;
   final int? pages;
+  final BookFormat? format;
+  final bool favorite;
+  final String? notes;
 
-  /// 1 to 5 stars, or null when not rated.
+  /// Set when the book is in the trash.
+  final DateTime? deletedAt;
+
+  /// A cover picked from the phone. Wins over [coverUrl] when set.
+  final String? coverPath;
+
+  /// The current reading: 1 to 5 stars (or null), dates, and pages logged.
   final int? rating;
   final DateTime? startedAt;
   final DateTime? finishedAt;
+  final List<LogEntry> readingLog;
+
+  /// Earlier readings, oldest first. Each one counts as a finished read.
+  final List<Reading> previousReadings;
+
+  Reading get currentReading => Reading(
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+        rating: rating,
+        log: readingLog,
+      );
+
+  /// Every time this book has been finished, for statistics.
+  List<Reading> get finishedReadings => [
+        ...previousReadings,
+        if (shelf == Shelf.finished) currentReading,
+      ];
 
   /// Fields that can be cleared take a function so that `() => null` means
   /// "clear it" while leaving the argument out means "keep it".
   Book copyWith({
     Shelf? shelf,
     List<String>? tags,
+    bool? favorite,
+    List<LogEntry>? readingLog,
+    List<Reading>? previousReadings,
+    BookFormat? Function()? format,
+    String? Function()? notes,
+    String? Function()? coverPath,
+    DateTime? Function()? deletedAt,
     int? Function()? pages,
     int? Function()? rating,
     DateTime? Function()? startedAt,
@@ -65,6 +121,13 @@ class Book {
         rating: rating != null ? rating() : this.rating,
         startedAt: startedAt != null ? startedAt() : this.startedAt,
         finishedAt: finishedAt != null ? finishedAt() : this.finishedAt,
+        format: format != null ? format() : this.format,
+        favorite: favorite ?? this.favorite,
+        notes: notes != null ? notes() : this.notes,
+        deletedAt: deletedAt != null ? deletedAt() : this.deletedAt,
+        coverPath: coverPath != null ? coverPath() : this.coverPath,
+        readingLog: readingLog ?? this.readingLog,
+        previousReadings: previousReadings ?? this.previousReadings,
       );
 
   /// Column values for the SQLite `books` table.
@@ -82,6 +145,14 @@ class Book {
         'rating': rating,
         'started_at': startedAt?.millisecondsSinceEpoch,
         'finished_at': finishedAt?.millisecondsSinceEpoch,
+        'format': format?.name,
+        'favorite': favorite ? 1 : 0,
+        'notes': notes,
+        'deleted_at': deletedAt?.millisecondsSinceEpoch,
+        'cover_path': coverPath,
+        'reading_log': jsonEncode([for (final e in readingLog) e.toJson()]),
+        'previous_readings':
+            jsonEncode([for (final r in previousReadings) r.toJson()]),
       };
 
   factory Book.fromMap(Map<String, Object?> map) => Book(
@@ -98,9 +169,17 @@ class Book {
         rating: map['rating'] as int?,
         startedAt: _dateFromMillis(map['started_at']),
         finishedAt: _dateFromMillis(map['finished_at']),
+        format: _formatFromName(map['format']),
+        favorite: map['favorite'] == 1,
+        notes: map['notes'] as String?,
+        deletedAt: _dateFromMillis(map['deleted_at']),
+        coverPath: map['cover_path'] as String?,
+        readingLog: logEntriesFromJson(_decode(map['reading_log'])),
+        previousReadings: readingsFromJson(_decode(map['previous_readings'])),
       );
 
-  /// Readable JSON used in backup files.
+  /// Readable JSON used in backup files. Custom covers from the phone are not
+  /// included, because they are files on this phone.
   Map<String, Object?> toJson() => {
         'id': id,
         'title': title,
@@ -115,6 +194,12 @@ class Book {
         'rating': rating,
         'startedAt': startedAt?.toIso8601String(),
         'finishedAt': finishedAt?.toIso8601String(),
+        'format': format?.name,
+        'favorite': favorite,
+        'notes': notes,
+        'deletedAt': deletedAt?.toIso8601String(),
+        'readingLog': [for (final e in readingLog) e.toJson()],
+        'previousReadings': [for (final r in previousReadings) r.toJson()],
       };
 
   factory Book.fromJson(Map<String, dynamic> json) => Book(
@@ -133,5 +218,11 @@ class Book {
         rating: json['rating'] as int?,
         startedAt: _dateFromIso(json['startedAt']),
         finishedAt: _dateFromIso(json['finishedAt']),
+        format: _formatFromName(json['format']),
+        favorite: json['favorite'] == true,
+        notes: json['notes'] as String?,
+        deletedAt: _dateFromIso(json['deletedAt']),
+        readingLog: logEntriesFromJson(json['readingLog']),
+        previousReadings: readingsFromJson(json['previousReadings']),
       );
 }

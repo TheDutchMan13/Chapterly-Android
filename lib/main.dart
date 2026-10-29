@@ -5,6 +5,7 @@ import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/open_library_client.dart';
 import 'data/sqlite_book_store.dart';
+import 'data/theme_options.dart';
 import 'screens/library_screen.dart';
 
 Future<void> main() async {
@@ -38,20 +39,19 @@ class ChapterlyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Chapterly',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: Colors.brown, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.brown,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
-      home: LibraryScreen(
-        repository: repository,
-        client: client,
-        settings: settings,
-        fileIo: fileIo,
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) => MaterialApp(
+        title: 'Chapterly',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(settings, Brightness.light),
+        darkTheme: buildTheme(settings, Brightness.dark),
+        home: LibraryScreen(
+          repository: repository,
+          client: client,
+          settings: settings,
+          fileIo: fileIo,
+        ),
       ),
     );
   }

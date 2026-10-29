@@ -24,7 +24,14 @@ class SqliteBookStore implements BookStore {
       pages INTEGER,
       rating INTEGER,
       started_at INTEGER,
-      finished_at INTEGER
+      finished_at INTEGER,
+      format TEXT,
+      favorite INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      deleted_at INTEGER,
+      cover_path TEXT,
+      reading_log TEXT,
+      previous_readings TEXT
     )
   ''';
 
@@ -32,7 +39,7 @@ class SqliteBookStore implements BookStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'chapterly.db'),
-      version: 2,
+      version: 3,
       onCreate: (db, version) => db.execute(_createBooksTable),
       onUpgrade: (db, oldVersion, newVersion) async {
         // Version 2 added pages, rating and reading dates.
@@ -41,6 +48,21 @@ class SqliteBookStore implements BookStore {
           await db.execute('ALTER TABLE books ADD COLUMN rating INTEGER');
           await db.execute('ALTER TABLE books ADD COLUMN started_at INTEGER');
           await db.execute('ALTER TABLE books ADD COLUMN finished_at INTEGER');
+        }
+        // Version 3 added format, favorites, notes, trash, custom covers,
+        // the reading log and earlier readings.
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE books ADD COLUMN format TEXT');
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute('ALTER TABLE books ADD COLUMN notes TEXT');
+          await db.execute('ALTER TABLE books ADD COLUMN deleted_at INTEGER');
+          await db.execute('ALTER TABLE books ADD COLUMN cover_path TEXT');
+          await db.execute('ALTER TABLE books ADD COLUMN reading_log TEXT');
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN previous_readings TEXT',
+          );
         }
       },
     );

@@ -58,7 +58,7 @@ void main() {
 
   test('removing a book deletes it from the store', () async {
     await repo.add(title: 'Dune', author: 'Frank Herbert', shelf: Shelf.finished);
-    await repo.remove(repo.booksOn(Shelf.finished).single.id);
+    await repo.deleteForever(repo.booksOn(Shelf.finished).single.id);
 
     final reloaded = BookRepository(store);
     await reloaded.load();

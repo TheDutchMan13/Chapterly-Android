@@ -1,4 +1,6 @@
 import '../models/book.dart';
+import '../models/book_format.dart';
+import '../models/reading.dart';
 import '../models/shelf.dart';
 
 class BookStats {
@@ -12,61 +14,77 @@ class BookStats {
     required this.byYear,
     required this.shelfCounts,
     required this.finishedWithoutDate,
+    required this.loggedPages,
+    required this.loggedByMonth,
+    required this.formatCounts,
   });
 
-  /// Finished books in the chosen year (or ever, when no year is chosen).
+  /// Finished readings in the chosen year (or ever, when no year is chosen).
+  /// A book that was read twice counts twice.
   final int finishedCount;
   final int pagesRead;
   final double? averageRating;
   final int? averagePages;
   final Book? longest;
 
-  /// Finished books per month (index 0 is January) in the chosen year.
+  /// Finished readings per month (index 0 is January) in the chosen year.
   final List<int> byMonth;
 
-  /// Finished books per year, oldest first. Always covers every year.
+  /// Finished readings per year, oldest first. Always covers every year.
   final Map<int, int> byYear;
   final Map<Shelf, int> shelfCounts;
 
-  /// Finished books that have no finish date, so no month or year.
+  /// Finished readings that have no finish date, so no month or year.
   final int finishedWithoutDate;
+
+  /// Pages written down in the reading log, in the chosen year or ever.
+  final int loggedPages;
+
+  /// Logged pages per month (index 0 is January).
+  final List<int> loggedByMonth;
+
+  /// Finished readings per book format. Books without a format are left out.
+  final Map<BookFormat, int> formatCounts;
 
   List<int> get yearsNewestFirst =>
       byYear.keys.toList()..sort((a, b) => b.compareTo(a));
 }
 
 BookStats computeStats(List<Book> books, {int? year}) {
-  final allFinished = [
+  final all = <(Book, Reading)>[
     for (final book in books)
-      if (book.shelf == Shelf.finished) book,
+      for (final reading in book.finishedReadings) (book, reading),
   ];
   final finished = [
-    for (final book in allFinished)
-      if (year == null || book.finishedAt?.year == year) book,
+    for (final item in all)
+      if (year == null || item.$2.finishedAt?.year == year) item,
   ];
 
   var pagesRead = 0;
   Book? longest;
-  for (final book in finished) {
-    final pages = book.pages;
-    if (pages == null) continue;
-    pagesRead += pages;
-    if (pages > (longest?.pages ?? 0)) longest = book;
-  }
-
-  final ratings = finished.map((b) => b.rating).whereType<int>().toList();
-  final pageCounts = finished.map((b) => b.pages).whereType<int>().toList();
-
+  final ratings = <int>[];
+  final pageCounts = <int>[];
+  final formatCounts = <BookFormat, int>{};
   final byMonth = List<int>.filled(12, 0);
-  for (final book in finished) {
-    final date = book.finishedAt;
+  for (final (book, reading) in finished) {
+    final pages = book.pages;
+    if (pages != null) {
+      pagesRead += pages;
+      pageCounts.add(pages);
+      if (pages > (longest?.pages ?? 0)) longest = book;
+    }
+    final rating = reading.rating;
+    if (rating != null) ratings.add(rating);
+    final format = book.format;
+    if (format != null) formatCounts[format] = (formatCounts[format] ?? 0) + 1;
+    final date = reading.finishedAt;
     if (date != null) byMonth[date.month - 1]++;
   }
 
   final yearCounts = <int, int>{};
   var withoutDate = 0;
-  for (final book in allFinished) {
-    final date = book.finishedAt;
+  for (final (_, reading) in all) {
+    final date = reading.finishedAt;
     if (date == null) {
       withoutDate++;
     } else {
@@ -74,6 +92,20 @@ BookStats computeStats(List<Book> books, {int? year}) {
     }
   }
   final sortedYears = yearCounts.keys.toList()..sort();
+
+  var loggedPages = 0;
+  final loggedByMonth = List<int>.filled(12, 0);
+  for (final book in books) {
+    final entries = [
+      ...book.readingLog,
+      for (final reading in book.previousReadings) ...reading.log,
+    ];
+    for (final entry in entries) {
+      if (year != null && entry.date.year != year) continue;
+      loggedPages += entry.pages;
+      loggedByMonth[entry.date.month - 1] += entry.pages;
+    }
+  }
 
   return BookStats(
     finishedCount: finished.length,
@@ -92,5 +124,8 @@ BookStats computeStats(List<Book> books, {int? year}) {
         shelf: books.where((b) => b.shelf == shelf).length,
     },
     finishedWithoutDate: withoutDate,
+    loggedPages: loggedPages,
+    loggedByMonth: loggedByMonth,
+    formatCounts: formatCounts,
   );
 }

@@ -12,11 +12,13 @@ Object? _tryJson(String text) {
   }
 }
 
-/// The whole library as readable JSON.
+/// The whole library (trash included) as readable JSON. Version 2 added
+/// format, favorites, notes, trash, the reading log and earlier readings.
+/// Version 1 files still restore fine.
 String encodeBackup(List<Book> books, {DateTime? now}) {
   final data = {
     'app': 'chapterly',
-    'version': 1,
+    'version': 2,
     'exportedAt': (now ?? DateTime.now()).toIso8601String(),
     'books': [for (final book in books) book.toJson()],
   };
