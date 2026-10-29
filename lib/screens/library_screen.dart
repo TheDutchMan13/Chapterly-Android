@@ -83,7 +83,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final ids = {..._selected};
     final before = [
       for (final id in ids)
-        if (widget.repository.byId(id) case final book?) book,
+        ?widget.repository.byId(id),
     ];
     final messenger = ScaffoldMessenger.of(context);
     await widget.repository.moveAllTo(ids, shelf);
