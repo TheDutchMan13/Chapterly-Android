@@ -28,6 +28,7 @@ const changelog = [
       'Choose whether book cards show the format and tags',
       'Reorder the shelf tabs',
       'Yearly pages goal, plus pages finished per month and per year',
+      'New app icon',
     ],
   ),
   ChangelogEntry(
