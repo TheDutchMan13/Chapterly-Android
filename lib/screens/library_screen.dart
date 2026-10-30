@@ -926,6 +926,8 @@ class _ShelfList extends StatelessWidget {
       if (book.author.isNotEmpty) book.author,
       if (showFormat && format != null) format.label,
       if (rating != null) ratingText(rating, asNumber: ratingAsNumber),
+      if (book.shelf == Shelf.inProgress && book.progress != null)
+        '${(book.progress! * 100).round()}% read',
     ].join(' · ');
     return [
       if (first.isNotEmpty) first,

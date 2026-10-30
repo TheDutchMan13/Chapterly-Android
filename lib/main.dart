@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/app_settings.dart';
+import 'data/auto_backup.dart';
 import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/open_library_client.dart';
@@ -17,6 +18,11 @@ Future<void> main() async {
   final settings = await AppSettings.load();
   final phoneSync = PhoneSync(repository: repository, settings: settings);
   await phoneSync.refresh();
+  WidgetsBinding.instance.addObserver(
+    AutoBackupObserver(repository: repository, settings: settings),
+  );
+  // Not awaited: the app opens while the backup is written.
+  runAutoBackup(repository, settings);
   runApp(
     ChapterlyApp(
       repository: repository,

@@ -113,7 +113,8 @@ class CsvImportResult {
 
   final List<Book> books;
 
-  /// Rows that had no title.
+  /// Rows that had no title, or were not books (Libib also lists films,
+  /// music and games).
   final int skipped;
 }
 
@@ -138,11 +139,25 @@ String? _isbnFrom(List<String> row, List<int> columns) {
 }
 
 Shelf _shelfFrom(String value) => switch (value.trim().toLowerCase()) {
-      'finished' || 'read' => Shelf.finished,
+      'finished' || 'read' || 'completed' => Shelf.finished,
       'in progress' || 'currently-reading' || 'reading' => Shelf.inProgress,
-      'unfinished' || 'stopped-reading' || 'did not finish' => Shelf.unfinished,
+      'unfinished' ||
+      'stopped-reading' ||
+      'did not finish' ||
+      'did-not-finish' ||
+      'dnf' ||
+      'abandoned' =>
+        Shelf.unfinished,
       _ => Shelf.forLater,
     };
+
+/// The year in "1965", "1965-08-01" or "August 1965".
+int? _parseYear(String value) {
+  final match = RegExp(r'(?<!\d)(\d{4})(?!\d)').firstMatch(value);
+  if (match == null) return null;
+  final year = int.parse(match.group(1)!);
+  return year > 0 ? year : null;
+}
 
 int? _parseRating(String value) {
   final number = num.tryParse(value);
@@ -163,8 +178,8 @@ List<String> _parseImportedTags(String value) => [
         if (!_goodreadsShelfNames.contains(tag.toLowerCase())) tag,
     ];
 
-/// Reads a CSV made by Chapterly, or exported from Goodreads. Columns are
-/// found by their header names. Throws [FormatException] with a message for
+/// Reads a CSV made by Chapterly, or exported from Goodreads, StoryGraph or
+/// Libib. Columns are found by their header names. Throws [FormatException] with a message for
 /// the user if the file does not look like a book list.
 CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
   final timestamp = now ?? DateTime.now();
@@ -183,20 +198,39 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
       'No "Title" column found. Is this a list of books?',
     );
   }
-  final authorColumns = find(['author', 'author_text']);
-  final shelfColumns = find(['shelf', 'exclusive shelf']);
-  final ratingColumns = find(['rating', 'my rating']);
-  final pagesColumns = find(['pages', 'number of pages']);
-  final startedColumns = find(['date started', 'start_date']);
-  final finishedColumns = find(['date finished', 'date read', 'finish_date']);
+  final authorColumns = find(['author', 'author_text', 'authors', 'creators']);
+  final shelfColumns = find(['shelf', 'exclusive shelf', 'read status', 'status']);
+  final ratingColumns = find(['rating', 'my rating', 'star rating']);
+  final pagesColumns = find(['pages', 'number of pages', 'length']);
+  final startedColumns = find(['date started', 'start_date', 'began']);
+  final finishedColumns = find([
+    'date finished',
+    'date read',
+    'finish_date',
+    'last date read',
+    'completed',
+  ]);
   final tagColumns = find(['tags', 'bookshelves']);
-  final isbnColumns = find(['isbn13', 'isbn_13', 'isbn', 'isbn_10']);
-  final yearColumns = find(['first published', 'original publication year']);
-  final addedColumns = find(['date added']);
+  final isbnColumns = find([
+    'isbn13',
+    'isbn_13',
+    'isbn',
+    'isbn_10',
+    'isbn/uid',
+    'ean_isbn13',
+    'upc_isbn10',
+  ]);
+  final yearColumns = find([
+    'first published',
+    'original publication year',
+    'publish_date',
+  ]);
+  final addedColumns = find(['date added', 'added']);
+  final typeColumns = find(['item_type']);
   final coverColumns = find(['cover url']);
   final formatColumns = find(['format', 'binding']);
   final favoriteColumns = find(['favorite', 'favourite']);
-  final notesColumns = find(['notes', 'my review']);
+  final notesColumns = find(['notes', 'my review', 'review']);
   final seriesColumns = find(['series']);
   final seriesNumberColumns = find(['series number']);
 
@@ -205,7 +239,8 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
   for (var i = 1; i < rows.length; i++) {
     final row = rows[i];
     final title = _cell(row, titleColumns);
-    if (title.isEmpty) {
+    final type = _cell(row, typeColumns).toLowerCase();
+    if (title.isEmpty || (type.isNotEmpty && type != 'book')) {
       skipped++;
       continue;
     }
@@ -219,7 +254,7 @@ CsvImportResult importBooksFromCsv(String text, {DateTime? now}) {
       tags: _parseImportedTags(_cell(row, tagColumns)),
       isbn: _isbnFrom(row, isbnColumns),
       coverUrl: cover.isEmpty ? null : cover,
-      firstPublishYear: _parsePositiveInt(_cell(row, yearColumns)),
+      firstPublishYear: _parseYear(_cell(row, yearColumns)),
       pages: _parsePositiveInt(_cell(row, pagesColumns)),
       rating: _parseRating(_cell(row, ratingColumns)),
       startedAt: parseDate(_cell(row, startedColumns)),

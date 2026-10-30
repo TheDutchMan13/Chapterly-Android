@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/quote.dart';
+import '../models/rating_aspect.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
 import 'book_store.dart';
@@ -261,6 +262,26 @@ class BookRepository extends ChangeNotifier {
   Future<void> setRating(String id, int? rating) =>
       _update(id, (book) => book.copyWith(rating: () => rating));
 
+  /// The page you are on now. Null or 0 clears it.
+  Future<void> setCurrentPage(String id, int? page) => _update(
+        id,
+        (book) => book.copyWith(
+          currentPage: () => page != null && page > 0 ? page : null,
+        ),
+      );
+
+  /// 1 to 5 stars for one part of the book, or null to clear it.
+  Future<void> setAspectRating(String id, RatingAspect aspect, int? value) =>
+      _update(id, (book) {
+        final ratings = {...book.aspectRatings};
+        if (value == null || value < 1 || value > 5) {
+          ratings.remove(aspect.name);
+        } else {
+          ratings[aspect.name] = value;
+        }
+        return book.copyWith(aspectRatings: ratings);
+      });
+
   Future<void> setPages(String id, int? pages) =>
       _update(id, (book) => book.copyWith(pages: () => pages));
 
@@ -329,6 +350,7 @@ class BookRepository extends ChangeNotifier {
           finishedAt: () => null,
           rating: () => null,
           readingLog: const [],
+          currentPage: () => null,
         );
       });
 
@@ -452,6 +474,17 @@ class BookRepository extends ChangeNotifier {
       );
       return book.copyWith(quotes: [...book.quotes, quote]);
     });
+  }
+
+  /// Adds quotes to several books at once (for example Kindle highlights).
+  Future<void> addQuotesToBooks(Map<String, List<Quote>> quotesByBook) {
+    if (quotesByBook.isEmpty) return Future.value();
+    return _updateMany(
+      quotesByBook.keys.toSet(),
+      (book) => book.copyWith(
+        quotes: [...book.quotes, ...?quotesByBook[book.id]],
+      ),
+    );
   }
 
   Future<void> removeQuote(String id, int index) => _update(id, (book) {

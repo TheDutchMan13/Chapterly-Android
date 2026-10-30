@@ -122,6 +122,10 @@ Book _absorb(Book base, Book other) {
     quotes: quotes,
     previousReadings: [...base.previousReadings, ...other.previousReadings],
     favorite: base.favorite || other.favorite,
+    currentPage: base.currentPage == null && other.currentPage != null
+        ? () => other.currentPage
+        : null,
+    aspectRatings: {...other.aspectRatings, ...base.aspectRatings},
     notes: () => notes,
     isbn: base.isbn == null && other.isbn != null ? () => other.isbn : null,
     coverUrl: base.coverUrl == null && other.coverUrl != null

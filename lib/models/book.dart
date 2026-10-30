@@ -28,6 +28,18 @@ List<String> _stringList(Object? value) =>
 
 Object? _decode(Object? text) => text is String ? jsonDecode(text) : null;
 
+/// Reads {"plot": 4, ...}, keeping only whole numbers from 1 to 5.
+Map<String, int> _ratingMap(Object? value) {
+  if (value is! Map) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.value is int &&
+          (entry.value as int) >= 1 &&
+          (entry.value as int) <= 5)
+        entry.key.toString(): entry.value as int,
+  };
+}
+
 class Book {
   Book({
     required this.id,
@@ -53,6 +65,8 @@ class Book {
     this.previousReadings = const [],
     this.collections = const [],
     this.quotes = const [],
+    this.currentPage,
+    this.aspectRatings = const {},
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? addedAt;
 
@@ -97,6 +111,30 @@ class Book {
   /// Passages saved from this book.
   final List<Quote> quotes;
 
+  /// The page you are on now, for books you are reading.
+  final int? currentPage;
+
+  /// Ratings for parts of the book (keys are [RatingAspect] names), 1 to 5.
+  final Map<String, int> aspectRatings;
+
+  /// How far you are: the current page, or else the pages in the reading log
+  /// of this reading. Null when neither is known.
+  int? get progressPage {
+    final page = currentPage;
+    if (page != null && page > 0) return page;
+    final logged = readingLog.fold<int>(0, (sum, entry) => sum + entry.pages);
+    return logged > 0 ? logged : null;
+  }
+
+  /// 0.0 to 1.0, or null when the page count or progress is unknown.
+  double? get progress {
+    final total = pages;
+    final done = progressPage;
+    if (total == null || total <= 0 || done == null) return null;
+    final value = done / total;
+    return value > 1 ? 1.0 : value;
+  }
+
   Reading get currentReading => Reading(
         startedAt: startedAt,
         finishedAt: finishedAt,
@@ -133,6 +171,8 @@ class Book {
     int? Function()? rating,
     DateTime? Function()? startedAt,
     DateTime? Function()? finishedAt,
+    int? Function()? currentPage,
+    Map<String, int>? aspectRatings,
     DateTime? updatedAt,
   }) =>
       Book(
@@ -162,6 +202,8 @@ class Book {
         previousReadings: previousReadings ?? this.previousReadings,
         collections: collections ?? this.collections,
         quotes: quotes ?? this.quotes,
+        currentPage: currentPage != null ? currentPage() : this.currentPage,
+        aspectRatings: aspectRatings ?? this.aspectRatings,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -191,6 +233,8 @@ class Book {
             jsonEncode([for (final r in previousReadings) r.toJson()]),
         'collections': jsonEncode(collections),
         'quotes': jsonEncode([for (final q in quotes) q.toJson()]),
+        'current_page': currentPage,
+        'aspect_ratings': jsonEncode(aspectRatings),
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
 
@@ -218,11 +262,12 @@ class Book {
         previousReadings: readingsFromJson(_decode(map['previous_readings'])),
         collections: _stringList(_decode(map['collections'])),
         quotes: quotesFromJson(_decode(map['quotes'])),
+        currentPage: map['current_page'] as int?,
+        aspectRatings: _ratingMap(_decode(map['aspect_ratings'])),
         updatedAt: _dateFromMillis(map['updated_at']),
       );
 
-  /// Readable JSON used in backup files. Custom covers from the phone are not
-  /// included, because they are files on this phone.
+  /// Readable JSON used in backup files and sync.
   Map<String, Object?> toJson() => {
         'id': id,
         'title': title,
@@ -247,6 +292,8 @@ class Book {
         'previousReadings': [for (final r in previousReadings) r.toJson()],
         'collections': collections,
         'quotes': [for (final q in quotes) q.toJson()],
+        'currentPage': currentPage,
+        'aspectRatings': aspectRatings,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -276,6 +323,8 @@ class Book {
         previousReadings: readingsFromJson(json['previousReadings']),
         collections: _stringList(json['collections']),
         quotes: quotesFromJson(json['quotes']),
+        currentPage: json['currentPage'] as int?,
+        aspectRatings: _ratingMap(json['aspectRatings']),
         updatedAt: _dateFromIso(json['updatedAt']),
       );
 }

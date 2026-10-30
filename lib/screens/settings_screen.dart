@@ -3,11 +3,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_info.dart';
 import '../data/app_settings.dart';
+import '../data/auto_backup.dart';
 import '../data/backup.dart';
 import '../data/book_repository.dart';
 import '../data/csv.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
+import '../data/kindle_clippings.dart';
 import '../data/phone_sync.dart';
 import '../data/sync_server.dart';
 import '../data/theme_options.dart';
@@ -232,6 +234,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         widget.settings.markBackedUp();
       });
 
+  Future<void> _backUpNow() => _run(() async {
+        await runAutoBackup(widget.repository, widget.settings, force: true);
+        if (!mounted) return;
+        final error = widget.settings.lastAutoBackupError;
+        _say(error == null ? 'Backup saved.' : 'Backup failed: $error');
+      });
+
+  String _autoBackupText() {
+    final settings = widget.settings;
+    final error = settings.lastAutoBackupError;
+    if (error != null) return 'Last try failed: $error';
+    final at = settings.lastAutoBackupAt;
+    if (at == null) return 'None yet';
+    final path = settings.lastAutoBackupPath;
+    return path == null
+        ? formatDateTime(at)
+        : '${formatDateTime(at)}\n$path';
+  }
+
   Future<void> _restoreBackup() => _run(() async {
         final text = await widget.fileIo.pickTextFile();
         if (text == null) return;
@@ -268,6 +289,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (duplicates > 0) parts.add('$duplicates already in your library');
         if (result.skipped > 0) parts.add('${result.skipped} skipped');
         _say('${parts.join(', ')}.');
+      });
+
+  Future<void> _importKindle() => _run(() async {
+        final text = await widget.fileIo.pickTextFile();
+        if (text == null) return;
+        final clippings = parseKindleClippings(text);
+        if (clippings.isEmpty) {
+          throw const FormatException(
+            'No highlights found. Pick the My Clippings.txt file from your '
+            'Kindle.',
+          );
+        }
+        final match = matchClippings(widget.repository.books, clippings);
+        await widget.repository.addQuotesToBooks(match.quotesByBook);
+        if (!mounted) return;
+        final added = match.added;
+        final lines = <String>[
+          'Added $added ${added == 1 ? 'quote' : 'quotes'} to '
+              '${match.quotesByBook.length} '
+              '${match.quotesByBook.length == 1 ? 'book' : 'books'}.',
+          if (match.alreadySaved > 0)
+            '${match.alreadySaved} ${match.alreadySaved == 1 ? 'was' : 'were'}'
+                ' already saved.',
+        ];
+        final missing = match.unmatchedTitles;
+        if (missing.isNotEmpty) {
+          lines.add('');
+          lines.add('No book in your library matches:');
+          for (final title in missing.take(15)) {
+            lines.add('• $title');
+          }
+          if (missing.length > 15) lines.add('and ${missing.length - 15} more');
+          lines.add('');
+          lines.add('Add those books, then import again. Highlights you '
+              'already have are not added twice.');
+        }
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Kindle highlights'),
+            content: SingleChildScrollView(child: Text(lines.join('\n'))),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       });
 
   @override
@@ -457,6 +527,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: _restoreBackup,
           ),
+          const _SectionHeader('Automatic backups'),
+          ListenableBuilder(
+            listenable: widget.settings,
+            builder: (context, _) => Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Back up by itself'),
+                  subtitle: const Text(
+                    'Saves a backup file in Documents/Chapterly when you open '
+                    'the app, and keeps the last $autoBackupKeep. That folder '
+                    'stays when the app is uninstalled.',
+                  ),
+                  value: widget.settings.autoBackup,
+                  onChanged: widget.settings.setAutoBackup,
+                ),
+                if (widget.settings.autoBackup) ...[
+                  ListTile(
+                    title: const Text('How often'),
+                    trailing: DropdownButton<int>(
+                      value: widget.settings.autoBackupDays,
+                      items: const [
+                        DropdownMenuItem(value: 1, child: Text('Every day')),
+                        DropdownMenuItem(value: 7, child: Text('Every week')),
+                        DropdownMenuItem(value: 30, child: Text('Every month')),
+                      ],
+                      onChanged: (days) {
+                        if (days != null) widget.settings.setAutoBackupDays(days);
+                      },
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text('Last automatic backup'),
+                    subtitle: Text(_autoBackupText()),
+                    trailing: TextButton(
+                      onPressed: _backUpNow,
+                      child: const Text('Back up now'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           const _SectionHeader('Backup reminder'),
           ListenableBuilder(
             listenable: widget.settings,
@@ -518,10 +630,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.file_download_outlined),
             title: const Text('Import from CSV'),
             subtitle: const Text(
-              'Add books from a Goodreads export or a Chapterly CSV. '
-              'Books you already have are skipped.',
+              'Add books from a Goodreads, StoryGraph or Libib export, or a '
+              'Chapterly CSV. Books you already have are skipped.',
             ),
             onTap: _importCsv,
+          ),
+          const _SectionHeader('Kindle'),
+          ListTile(
+            leading: const Icon(Icons.format_quote_outlined),
+            title: const Text('Import Kindle highlights'),
+            subtitle: const Text(
+              'Pick the My Clippings.txt file from your Kindle (copy it to '
+              'your phone first). Highlights become quotes on books you '
+              'already have.',
+            ),
+            onTap: _importKindle,
           ),
           const _SectionHeader('About'),
           const ListTile(

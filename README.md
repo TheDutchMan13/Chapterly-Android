@@ -56,6 +56,19 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   and tags (Settings > Library). Reorder the shelf tabs there too
 - Yearly pages goal next to the books goal, and charts of pages finished per
   month and per year
+- Automatic backups (Settings > Automatic backups): a backup file in
+  Documents/Chapterly every day, week or month when you open the app, keeping
+  the last five. That folder stays when the app is uninstalled (Android 11 and
+  newer; older phones use the app's own folder)
+- Kindle highlights: import My Clippings.txt and the highlights become quotes
+  on matching books
+- Current page for books in progress, with a progress bar, a percentage on the
+  card and a pace estimate
+- Tag goals per year (Statistics > pick a year)
+- Rating details: plot, characters, writing and pacing, next to the overall
+  rating
+- Books like this online: suggestions from Open Library by subject
+- CSV import also reads StoryGraph and Libib exports
 - Sync with a PC on your home Wi-Fi (Settings > Sync with a PC). Off by
   default. Works while Chapterly is open. Settings shows when the last sync
   happened and what it did. The protocol is in `docs/SYNC.md`

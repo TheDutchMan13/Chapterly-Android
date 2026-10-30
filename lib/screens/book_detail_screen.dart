@@ -11,6 +11,7 @@ import '../data/rating_text.dart';
 import '../data/statistics.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
+import '../models/rating_aspect.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
@@ -18,6 +19,7 @@ import 'author_books_screen.dart';
 import 'book_card_screen.dart';
 import 'log_entry_dialog.dart';
 import 'similar_books_screen.dart';
+import 'subject_books_screen.dart';
 
 /// Shows one book. Change its shelf, format, rating, dates, pages, tags,
 /// notes, keep a reading log, read it again, or move it to the trash.
@@ -100,6 +102,42 @@ class BookDetailScreen extends StatelessWidget {
     final pages = int.tryParse(text.trim());
     await repository.setPages(book.id, pages != null && pages > 0 ? pages : null);
   }
+
+  Future<void> _editCurrentPage(BuildContext context, Book book) async {
+    final text = await _askText(
+      context,
+      title: 'Current page',
+      initial: book.currentPage?.toString() ?? '',
+      label: 'Page you are on',
+      helper: book.pages == null
+          ? 'Leave empty to clear'
+          : 'Out of ${book.pages}. Leave empty to clear',
+      keyboardType: TextInputType.number,
+      formatters: [FilteringTextInputFormatter.digitsOnly],
+    );
+    if (text == null) return;
+    await repository.setCurrentPage(book.id, int.tryParse(text.trim()));
+  }
+
+  String _progressText(Book book) {
+    final page = book.currentPage;
+    final progress = book.progress;
+    final percent = progress == null ? '' : ' (${(progress * 100).round()}%)';
+    if (page == null) {
+      final logged = book.progressPage;
+      return logged == null
+          ? 'Not set'
+          : 'About page $logged, from your reading log$percent';
+    }
+    final total = book.pages;
+    return total == null ? 'Page $page' : 'Page $page of $total$percent';
+  }
+
+  String _aspectSummary(Book book) => [
+        for (final aspect in RatingAspect.values)
+          if (book.aspectRatings[aspect.name] case final value?)
+            '${aspect.label} $value',
+      ].join(' · ');
 
   Future<void> _editNotes(BuildContext context, Book book) async {
     final text = await _askText(
@@ -409,6 +447,19 @@ class BookDetailScreen extends StatelessWidget {
     return repository.setCollections(book.id, names);
   }
 
+  void _openSubjectBooks(BuildContext context, Book book) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SubjectBooksScreen(
+          repository: repository,
+          client: OpenLibraryClient(),
+          settings: settings,
+          book: book,
+        ),
+      ),
+    );
+  }
+
   void _openAuthorBooks(BuildContext context, String author) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -571,6 +622,15 @@ class BookDetailScreen extends StatelessWidget {
                     label: const Text('More by this author online'),
                   ),
                 ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  onPressed: () => _openSubjectBooks(context, book),
+                  icon: const Icon(Icons.explore_outlined),
+                  label: const Text('Books like this online'),
+                ),
+              ),
               if (book.firstPublishYear != null)
                 Text('First published ${book.firstPublishYear}'),
               if (book.isbn != null) Text('ISBN ${book.isbn}'),
@@ -631,6 +691,42 @@ class BookDetailScreen extends StatelessWidget {
                   ],
                 ),
               ],
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Rating details'),
+                subtitle: Text(
+                  book.aspectRatings.isEmpty
+                      ? 'Rate the plot, characters, writing and pacing'
+                      : _aspectSummary(book),
+                ),
+                children: [
+                  for (final aspect in RatingAspect.values)
+                    Row(
+                      children: [
+                        Expanded(child: Text(aspect.label)),
+                        for (var star = 1; star <= 5; star++)
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            iconSize: 22,
+                            tooltip: '${aspect.label}: $star of 5',
+                            icon: Icon(
+                              star <= (book.aspectRatings[aspect.name] ?? 0)
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: Colors.amber,
+                            ),
+                            onPressed: () => repository.setAspectRating(
+                              book.id,
+                              aspect,
+                              book.aspectRatings[aspect.name] == star
+                                  ? null
+                                  : star,
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
               const SizedBox(height: 8),
               _dateTile(context, book, start: true),
               _dateTile(context, book, start: false),
@@ -641,6 +737,29 @@ class BookDetailScreen extends StatelessWidget {
                 subtitle: Text(book.pages?.toString() ?? 'Not set'),
                 onTap: () => _editPages(context, book),
               ),
+              if (book.shelf == Shelf.inProgress)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.bookmark_outline),
+                  title: const Text('Current page'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_progressText(book)),
+                      if (book.progress != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: LinearProgressIndicator(value: book.progress),
+                        ),
+                      if (pace != null && book.readingLog.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text('Pace: ${pace.describe()}'),
+                        ),
+                    ],
+                  ),
+                  onTap: () => _editCurrentPage(context, book),
+                ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.collections_bookmark_outlined),

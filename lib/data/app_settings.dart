@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -72,6 +74,12 @@ class AppSettings extends ChangeNotifier {
   DateTime? _reminderSince;
   final Map<int, int> _goals = {};
   final Map<int, int> _pageGoals = {};
+  final Map<int, Map<String, int>> _tagGoals = {};
+  bool _autoBackup = false;
+  int _autoBackupDays = 7;
+  DateTime? _lastAutoBackupAt;
+  String? _lastAutoBackupPath;
+  String? _lastAutoBackupError;
   Shelf? _defaultShelf;
   BookFormat? _defaultFormat;
   List<String> _defaultTags = [];
@@ -121,6 +129,15 @@ class AppSettings extends ChangeNotifier {
 
   /// The names of your own shelves, including ones with no books yet.
   List<String> get collections => List.unmodifiable(_collections);
+
+  /// Save a backup file by itself every [autoBackupDays] days.
+  bool get autoBackup => _autoBackup;
+  int get autoBackupDays => _autoBackupDays;
+  DateTime? get lastAutoBackupAt => _lastAutoBackupAt;
+  String? get lastAutoBackupPath => _lastAutoBackupPath;
+
+  /// Why the last automatic backup failed, or null if it worked.
+  String? get lastAutoBackupError => _lastAutoBackupError;
 
   /// The shelf new books go on, or null to ask every time.
   Shelf? get defaultShelf => _defaultShelf;
@@ -186,6 +203,12 @@ class AppSettings extends ChangeNotifier {
       for (final name in prefs.getStringList('shelfOrder') ?? <String>[])
         ?Shelf.values.asNameMap()[name],
     ]);
+    settings._tagGoals.addAll(_decodeTagGoals(prefs.getString('tagGoals')));
+    settings._autoBackup = prefs.getBool('autoBackup') ?? false;
+    settings._autoBackupDays = prefs.getInt('autoBackupDays') ?? 7;
+    settings._lastAutoBackupAt = _fromMillis(prefs.getInt('lastAutoBackup'));
+    settings._lastAutoBackupPath = prefs.getString('lastAutoBackupPath');
+    settings._lastAutoBackupError = prefs.getString('lastAutoBackupError');
     settings._lastBackup = _fromMillis(prefs.getInt('lastBackup'));
     settings._backupSnoozed = _fromMillis(prefs.getInt('backupSnoozed'));
     settings._reminderSince = _fromMillis(prefs.getInt('backupSince'));
@@ -202,6 +225,94 @@ class AppSettings extends ChangeNotifier {
       if (year != null && goal != null) settings._pageGoals[year] = goal;
     }
     return settings;
+  }
+
+  void setAutoBackup(bool value) {
+    _autoBackup = value;
+    prefs?.setBool('autoBackup', value);
+    notifyListeners();
+  }
+
+  void setAutoBackupDays(int days) {
+    _autoBackupDays = days;
+    prefs?.setInt('autoBackupDays', days);
+    notifyListeners();
+  }
+
+  /// True when automatic backups are on and none was made in the last
+  /// [autoBackupDays] days.
+  bool autoBackupDue([DateTime? now]) {
+    if (!_autoBackup) return false;
+    final last = _lastAutoBackupAt;
+    if (last == null) return true;
+    final current = now ?? DateTime.now();
+    return !current.isBefore(last.add(Duration(days: _autoBackupDays)));
+  }
+
+  void recordAutoBackup({required DateTime at, required String path}) {
+    _lastAutoBackupAt = at;
+    _lastAutoBackupPath = path;
+    _lastAutoBackupError = null;
+    prefs?.setInt('lastAutoBackup', at.millisecondsSinceEpoch);
+    prefs?.setString('lastAutoBackupPath', path);
+    prefs?.remove('lastAutoBackupError');
+    notifyListeners();
+  }
+
+  void recordAutoBackupError(String message) {
+    _lastAutoBackupError = message;
+    prefs?.setString('lastAutoBackupError', message);
+    notifyListeners();
+  }
+
+  static Map<int, Map<String, int>> _decodeTagGoals(String? text) {
+    if (text == null) return {};
+    try {
+      final data = jsonDecode(text);
+      if (data is! Map) return {};
+      final result = <int, Map<String, int>>{};
+      for (final entry in data.entries) {
+        final year = int.tryParse(entry.key.toString());
+        final goals = entry.value;
+        if (year == null || goals is! Map) continue;
+        result[year] = {
+          for (final goal in goals.entries)
+            if (goal.value is int && (goal.value as int) > 0)
+              goal.key.toString(): goal.value as int,
+        };
+      }
+      return result;
+    } on FormatException {
+      return {};
+    }
+  }
+
+  /// Goals for books with a tag in [year], for example {"sci-fi": 10}.
+  Map<String, int> tagGoalsFor(int year) =>
+      Map.unmodifiable(_tagGoals[year] ?? const <String, int>{});
+
+  /// A null or zero goal removes the goal for that tag and year.
+  void setTagGoal(int year, String tag, int? goal) {
+    final clean = tag.trim();
+    if (clean.isEmpty) return;
+    final goals = {...?_tagGoals[year]};
+    if (goal == null || goal <= 0) {
+      goals.remove(clean);
+    } else {
+      goals[clean] = goal;
+    }
+    if (goals.isEmpty) {
+      _tagGoals.remove(year);
+    } else {
+      _tagGoals[year] = goals;
+    }
+    prefs?.setString(
+      'tagGoals',
+      jsonEncode({
+        for (final entry in _tagGoals.entries) '${entry.key}': entry.value,
+      }),
+    );
+    notifyListeners();
   }
 
   /// Removes repeats and adds any shelf that is missing, keeping the order.

@@ -13,6 +13,19 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.8.0',
+    date: '2026-10-29',
+    changes: [
+      'Automatic backups to Documents/Chapterly, keeping the last five',
+      'Import Kindle highlights (My Clippings.txt) as quotes',
+      'Current page: progress bar and pace for books you are reading',
+      'Tag goals, such as 10 sci-fi books this year',
+      'Rating details: rate the plot, characters, writing and pacing',
+      'Books like this online: suggestions by subject from Open Library',
+      'Import from StoryGraph and Libib CSV exports',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.7.0',
     date: '2026-10-29',
     changes: [

@@ -6,6 +6,7 @@ import '../data/book_repository.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
 import '../data/statistics.dart';
+import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'year_review_screen.dart';
@@ -120,6 +121,123 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 child: Text(goal == null ? 'Set a goal' : 'Change goal'),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addTagGoal(int year) async {
+    final tags = widget.repository.allTags;
+    if (tags.isEmpty) return;
+    var tag = tags.first;
+    final controller = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('$year tag goal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: tag,
+                decoration: const InputDecoration(labelText: 'Tag'),
+                items: [
+                  for (final t in tags)
+                    DropdownMenuItem(value: t, child: Text(t)),
+                ],
+                onChanged: (value) =>
+                    setDialogState(() => tag = value ?? tag),
+              ),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Books to read'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final text = controller.text;
+    controller.dispose();
+    if (saved != true) return;
+    widget.settings.setTagGoal(year, tag, int.tryParse(text.trim()));
+  }
+
+  Widget _tagGoalsCard(int year, List<Book> books) {
+    final goals = widget.settings.tagGoalsFor(year);
+    final names = goals.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final hasTags = widget.repository.allTags.isNotEmpty;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$year tag goals', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (names.isEmpty)
+              Text(
+                hasTags
+                    ? 'No tag goals yet, for example 10 books tagged sci-fi.'
+                    : 'Add tags to your books to set goals for them.',
+              ),
+            for (final name in names)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$name: ${finishedWithTag(books, name, year)} '
+                            'of ${goals[name]}',
+                          ),
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(
+                            value: (finishedWithTag(books, name, year) /
+                                    (goals[name] ?? 1))
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove goal',
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          widget.settings.setTagGoal(year, name, null),
+                    ),
+                  ],
+                ),
+              ),
+            if (hasTags)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => _addTagGoal(year),
+                  child: const Text('Add a tag goal'),
+                ),
+              ),
           ],
         ),
       ),
@@ -405,6 +523,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 _goalCard(year, stats),
                 const SizedBox(height: 12),
                 _pagesGoalCard(year, stats),
+                const SizedBox(height: 12),
+                _tagGoalsCard(year, books),
                 const SizedBox(height: 12),
                 _monthlyGoalCard(year, stats),
                 const SizedBox(height: 12),

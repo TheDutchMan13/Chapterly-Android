@@ -140,6 +140,41 @@ String openLibraryQuery(String text) {
   };
 }
 
+const _skippedSubjects = [
+  'accessible book',
+  'protected daisy',
+  'in library',
+  'lending library',
+  'overdrive',
+  'large type books',
+  'staff picks',
+  'new york times',
+  'reading level',
+  'long now',
+];
+
+const _tooBroadSubjects = {'fiction', 'literature', 'novel', 'novels'};
+
+/// Useful subjects from an Open Library "subject" list, without library
+/// labels, codes and very broad ones, in their original order.
+List<String> cleanSubjects(Object? value, {int max = 8}) {
+  if (value is! List) return [];
+  final seen = <String>{};
+  final result = <String>[];
+  for (final item in value) {
+    final subject = item.toString().trim();
+    final lower = subject.toLowerCase();
+    if (subject.isEmpty || subject.length > 40) continue;
+    if (lower.contains('=') || lower.contains(':')) continue;
+    if (_tooBroadSubjects.contains(lower)) continue;
+    if (_skippedSubjects.any(lower.contains)) continue;
+    if (!seen.add(lower)) continue;
+    result.add(subject);
+    if (result.length >= max) break;
+  }
+  return result;
+}
+
 /// Searches https://openlibrary.org. No account or API key is needed.
 class OpenLibraryClient {
   OpenLibraryClient({http.Client? client}) : _client = client ?? http.Client();
@@ -168,7 +203,7 @@ class OpenLibraryClient {
   Future<Object?> _getJson(Uri uri) async {
     final response = await _client.get(uri, headers: {
       'User-Agent':
-          'Chapterly/1.7 (https://github.com/TheDutchMan13/Chapterly-Android)',
+          'Chapterly/1.8 (https://github.com/TheDutchMan13/Chapterly-Android)',
     }).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
@@ -196,6 +231,46 @@ class OpenLibraryClient {
         .map(OpenLibraryEdition.fromJson)
         .toList();
   }
+
+  /// The subjects Open Library lists for a book (such as "Space opera"),
+  /// found by ISBN, or else by title and author.
+  Future<List<String>> subjectsFor({
+    required String title,
+    required String author,
+    String? isbn,
+  }) async {
+    final digits = (isbn ?? '').replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleanTitle = title.replaceAll('"', '').trim();
+    final cleanAuthor = author.replaceAll('"', '').trim();
+    final query = digits.isNotEmpty
+        ? 'isbn:$digits'
+        : [
+            'title:"$cleanTitle"',
+            if (cleanAuthor.isNotEmpty) 'author:"$cleanAuthor"',
+          ].join(' ');
+    final data = await _getJson(
+      Uri.https('openlibrary.org', '/search.json', {
+        'q': query,
+        'limit': '3',
+        'fields': 'key,subject',
+      }),
+    );
+    final docs = data is Map<String, dynamic> ? data['docs'] : null;
+    if (docs is List) {
+      for (final doc in docs.whereType<Map<String, dynamic>>()) {
+        final subjects = cleanSubjects(doc['subject']);
+        if (subjects.isNotEmpty) return subjects;
+      }
+    }
+    if (digits.isNotEmpty && cleanTitle.isNotEmpty) {
+      return subjectsFor(title: title, author: author);
+    }
+    return [];
+  }
+
+  /// Books Open Library files under [subject].
+  Future<List<OpenLibraryBook>> searchSubject(String subject) =>
+      search('subject:"${subject.replaceAll('"', '')}"');
 
   /// Finds the book with this ISBN, or null if there is no match.
   /// Dashes and spaces in [isbn] are ignored.

@@ -36,7 +36,9 @@ class SqliteBookStore implements BookStore {
       previous_readings TEXT,
       updated_at INTEGER,
       collections TEXT,
-      quotes TEXT
+      quotes TEXT,
+      current_page INTEGER,
+      aspect_ratings TEXT
     )
   ''';
 
@@ -51,7 +53,7 @@ class SqliteBookStore implements BookStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'chapterly.db'),
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute(_createBooksTable);
         await db.execute(_createTombstonesTable);
@@ -99,6 +101,13 @@ class SqliteBookStore implements BookStore {
         if (oldVersion < 6) {
           await db.execute('ALTER TABLE books ADD COLUMN collections TEXT');
           await db.execute('ALTER TABLE books ADD COLUMN quotes TEXT');
+        }
+        // Version 7 added the current page and ratings for parts of a book.
+        if (oldVersion < 7) {
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN current_page INTEGER',
+          );
+          await db.execute('ALTER TABLE books ADD COLUMN aspect_ratings TEXT');
         }
       },
     );

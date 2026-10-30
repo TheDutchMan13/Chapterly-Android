@@ -283,22 +283,33 @@ int _daysBetween(DateTime from, DateTime to) => DateTime.utc(to.year, to.month, 
     .difference(DateTime.utc(from.year, from.month, from.day))
     .inDays;
 
-/// The pace of a book on the In progress shelf, or null when there is no
-/// pages entry in its reading log yet.
+/// The pace of a book on the In progress shelf, or null when there is
+/// nothing to go on yet. Progress is the current page when it is set,
+/// otherwise the pages in the reading log. Time counts from the start date or
+/// the first log entry, whichever is earlier.
 ReadingPace? readingPace(Book book, {DateTime? now}) {
   if (book.shelf != Shelf.inProgress) return null;
   final entries = [
     for (final entry in book.readingLog)
       if (entry.pages > 0) entry,
   ];
-  if (entries.isEmpty) return null;
+  final page = book.currentPage;
+  final pagesRead = page != null && page > 0
+      ? page
+      : entries.fold<int>(0, (sum, entry) => sum + entry.pages);
+  if (pagesRead <= 0) return null;
   final today = _day(now ?? DateTime.now());
-  final pagesRead = entries.fold<int>(0, (sum, entry) => sum + entry.pages);
-  var start = _day(entries.map((e) => e.date).reduce(
-        (a, b) => a.isBefore(b) ? a : b,
-      ));
+  DateTime? first;
+  for (final entry in entries) {
+    final day = _day(entry.date);
+    if (first == null || day.isBefore(first)) first = day;
+  }
   final started = book.startedAt;
-  if (started != null && _day(started).isBefore(start)) start = _day(started);
+  if (started != null && (first == null || _day(started).isBefore(first))) {
+    first = _day(started);
+  }
+  if (first == null) return null;
+  final start = first;
   final days = _daysBetween(start, today) + 1;
   final pace = pagesRead / (days < 1 ? 1 : days);
 
@@ -319,6 +330,19 @@ ReadingPace? readingPace(Book book, {DateTime? now}) {
         ? null
         : DateTime(today.year, today.month, today.day + daysLeft),
   );
+}
+
+/// Finished readings in [year] of books that have [tag] (ignoring capitals).
+int finishedWithTag(List<Book> books, String tag, int year) {
+  final key = tag.trim().toLowerCase();
+  var count = 0;
+  for (final book in books) {
+    if (!book.tags.any((t) => t.toLowerCase() == key)) continue;
+    for (final reading in book.finishedReadings) {
+      if (reading.finishedAt?.year == year) count++;
+    }
+  }
+  return count;
 }
 
 /// Progress towards a yearly reading goal.
