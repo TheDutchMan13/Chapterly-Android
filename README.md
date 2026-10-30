@@ -88,6 +88,10 @@ search requests and cover image downloads. Your library stays on the phone.
 Every push to `main` builds an APK with GitHub Actions (Actions tab,
 download the `chapterly-apk` artifact).
 
+## AI disclaimer
+
+Parts of this project were written with help from an AI assistant (Claude, made by Anthropic). The code and documentation may contain mistakes or behave in unexpected ways. Review and test it before relying on it, especially for anything important.
+
 ## License
 
 Chapterly is free software under the GNU General Public License v3.0.
