@@ -13,6 +13,17 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.9.0',
+    date: '2026-10-30',
+    changes: [
+      'Wishlist: set a priority and where to get each For later book',
+      'Next up: put your For later books in the order you will read them',
+      'Sort by priority or by Next up, and set the priority of several books',
+      'Pick any accent colour you like, not just the ready-made ones',
+      'Paper look: a warm, cream page colour for light mode',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.8.0',
     date: '2026-10-29',
     changes: [

@@ -384,6 +384,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: widget.settings.pureBlack,
                   onChanged: widget.settings.setPureBlack,
                 ),
+                SwitchListTile(
+                  title: const Text('Paper look in light mode'),
+                  subtitle: const Text(
+                    'A warm, cream page colour instead of white.',
+                  ),
+                  value: widget.settings.paperLight,
+                  onChanged: widget.settings.setPaperLight,
+                ),
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -399,6 +407,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onTap: () => widget.settings
                               .setAccent(choice.color.toARGB32()),
                         ),
+                      _CustomAccentDot(
+                        current: Color(widget.settings.accent),
+                        selected: !accentChoices.any(
+                          (choice) =>
+                              choice.color.toARGB32() ==
+                              widget.settings.accent,
+                        ),
+                        onPick: (colour) =>
+                            widget.settings.setAccent(colour.toARGB32()),
+                      ),
                     ],
                   ),
                 ),
@@ -710,6 +728,137 @@ class _AccentDot extends StatelessWidget {
               : null,
         ),
       ),
+    );
+  }
+}
+
+class _CustomAccentDot extends StatelessWidget {
+  const _CustomAccentDot({
+    required this.current,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final Color current;
+  final bool selected;
+  final ValueChanged<Color> onPick;
+
+  Future<void> _open(BuildContext context) async {
+    final picked = await showDialog<Color>(
+      context: context,
+      builder: (_) => _ColourDialog(initial: current),
+    );
+    if (picked != null) onPick(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Custom colour',
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => _open(context),
+        child: CircleAvatar(
+          radius: 20,
+          backgroundColor: selected ? current : scheme.surfaceContainerHighest,
+          child: Icon(
+            selected ? Icons.check : Icons.palette_outlined,
+            color: selected ? Colors.white : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ColourDialog extends StatefulWidget {
+  const _ColourDialog({required this.initial});
+
+  final Color initial;
+
+  @override
+  State<_ColourDialog> createState() => _ColourDialogState();
+}
+
+class _ColourDialogState extends State<_ColourDialog> {
+  late HSVColor _hsv = HSVColor.fromColor(widget.initial);
+
+  Widget _slider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required HSVColor Function(double) change,
+  }) {
+    final shown = value < min ? min : (value > max ? max : value);
+    return Row(
+      children: [
+        SizedBox(width: 88, child: Text(label)),
+        Expanded(
+          child: Slider(
+            value: shown,
+            min: min,
+            max: max,
+            onChanged: (next) => setState(() => _hsv = change(next)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = _hsv.toColor();
+    return AlertDialog(
+      title: const Text('Custom colour'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: colour,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _slider(
+              label: 'Colour',
+              value: _hsv.hue,
+              min: 0,
+              max: 360,
+              change: (v) => _hsv.withHue(v),
+            ),
+            _slider(
+              label: 'Strength',
+              value: _hsv.saturation,
+              min: 0,
+              max: 1,
+              change: (v) => _hsv.withSaturation(v),
+            ),
+            _slider(
+              label: 'Brightness',
+              value: _hsv.value,
+              min: 0.25,
+              max: 1,
+              change: (v) => _hsv.withValue(v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(colour),
+          child: const Text('Use this colour'),
+        ),
+      ],
     );
   }
 }

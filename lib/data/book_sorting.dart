@@ -15,6 +15,18 @@ int _compareOptional<T extends Comparable<Object>>(
   return _direction(a.compareTo(b), ascending);
 }
 
+/// The Next up order: books you have placed come first, in your order. The
+/// rest follow by priority (high first, none last), then the book that has
+/// waited longest.
+int compareNextUp(Book a, Book b) {
+  final byPlace = _compareOptional(a.queuePosition, b.queuePosition, true);
+  if (byPlace != 0) return byPlace;
+  int rank(Book book) => book.priority?.index ?? -1;
+  final byPriority = rank(b).compareTo(rank(a));
+  if (byPriority != 0) return byPriority;
+  return a.addedAt.compareTo(b.addedAt);
+}
+
 /// Returns a sorted copy of [books].
 List<Book> sortBooks(
   List<Book> books,
@@ -43,6 +55,9 @@ List<Book> sortBooks(
           _direction(a.updatedAt.compareTo(b.updatedAt), ascending),
         SortField.format =>
           _compareOptional(a.format?.index, b.format?.index, ascending),
+        SortField.priority =>
+          _compareOptional(a.priority?.index, b.priority?.index, ascending),
+        SortField.nextUp => _direction(compareNextUp(a, b), ascending),
         SortField.favorite => _direction(
             a.favorite == b.favorite ? 0 : (a.favorite ? 1 : -1),
             ascending,

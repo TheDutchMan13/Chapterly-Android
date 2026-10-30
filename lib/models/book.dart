@@ -4,6 +4,7 @@ import 'book_format.dart';
 import 'quote.dart';
 import 'reading.dart';
 import 'shelf.dart';
+import 'wish_priority.dart';
 
 int _idSequence = 0;
 
@@ -22,6 +23,9 @@ DateTime? _dateFromIso(Object? value) =>
 
 BookFormat? _formatFromName(Object? value) =>
     value is String ? BookFormat.values.asNameMap()[value] : null;
+
+WishPriority? _priorityFromName(Object? value) =>
+    value is String ? WishPriority.values.asNameMap()[value] : null;
 
 List<String> _stringList(Object? value) =>
     value is List ? [for (final item in value) item.toString()] : const [];
@@ -67,6 +71,9 @@ class Book {
     this.quotes = const [],
     this.currentPage,
     this.aspectRatings = const {},
+    this.priority,
+    this.buyAt,
+    this.queuePosition,
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? addedAt;
 
@@ -116,6 +123,25 @@ class Book {
 
   /// Ratings for parts of the book (keys are [RatingAspect] names), 1 to 5.
   final Map<String, int> aspectRatings;
+
+  /// How much you want to read this book, for the For later shelf.
+  final WishPriority? priority;
+
+  /// Where to buy or borrow it: a shop, a library or a web link.
+  final String? buyAt;
+
+  /// Place in your Next up order (0 is first). Null when not placed.
+  final int? queuePosition;
+
+  /// [buyAt] as a web link, or null when it is plain text such as "Library".
+  Uri? get buyLink {
+    final text = buyAt?.trim() ?? '';
+    if (text.isEmpty || text.contains(RegExp(r'\s'))) return null;
+    final hasScheme = text.startsWith('http://') || text.startsWith('https://');
+    if (!hasScheme && !text.contains('.')) return null;
+    final uri = Uri.tryParse(hasScheme ? text : 'https://$text');
+    return uri != null && uri.host.contains('.') ? uri : null;
+  }
 
   /// How far you are: the current page, or else the pages in the reading log
   /// of this reading. Null when neither is known.
@@ -173,6 +199,9 @@ class Book {
     DateTime? Function()? finishedAt,
     int? Function()? currentPage,
     Map<String, int>? aspectRatings,
+    WishPriority? Function()? priority,
+    String? Function()? buyAt,
+    int? Function()? queuePosition,
     DateTime? updatedAt,
   }) =>
       Book(
@@ -204,6 +233,10 @@ class Book {
         quotes: quotes ?? this.quotes,
         currentPage: currentPage != null ? currentPage() : this.currentPage,
         aspectRatings: aspectRatings ?? this.aspectRatings,
+        priority: priority != null ? priority() : this.priority,
+        buyAt: buyAt != null ? buyAt() : this.buyAt,
+        queuePosition:
+            queuePosition != null ? queuePosition() : this.queuePosition,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -235,6 +268,9 @@ class Book {
         'quotes': jsonEncode([for (final q in quotes) q.toJson()]),
         'current_page': currentPage,
         'aspect_ratings': jsonEncode(aspectRatings),
+        'priority': priority?.name,
+        'buy_at': buyAt,
+        'queue_position': queuePosition,
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
 
@@ -264,6 +300,9 @@ class Book {
         quotes: quotesFromJson(_decode(map['quotes'])),
         currentPage: map['current_page'] as int?,
         aspectRatings: _ratingMap(_decode(map['aspect_ratings'])),
+        priority: _priorityFromName(map['priority']),
+        buyAt: map['buy_at'] as String?,
+        queuePosition: map['queue_position'] as int?,
         updatedAt: _dateFromMillis(map['updated_at']),
       );
 
@@ -294,6 +333,9 @@ class Book {
         'quotes': [for (final q in quotes) q.toJson()],
         'currentPage': currentPage,
         'aspectRatings': aspectRatings,
+        'priority': priority?.name,
+        'buyAt': buyAt,
+        'queuePosition': queuePosition,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -325,6 +367,9 @@ class Book {
         quotes: quotesFromJson(json['quotes']),
         currentPage: json['currentPage'] as int?,
         aspectRatings: _ratingMap(json['aspectRatings']),
+        priority: _priorityFromName(json['priority']),
+        buyAt: json['buyAt'] as String?,
+        queuePosition: json['queuePosition'] as int?,
         updatedAt: _dateFromIso(json['updatedAt']),
       );
 }

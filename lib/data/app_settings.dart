@@ -18,6 +18,8 @@ enum SortField {
   dateModified,
   format,
   favorite,
+  priority,
+  nextUp,
 }
 
 extension SortFieldLabel on SortField {
@@ -32,6 +34,8 @@ extension SortFieldLabel on SortField {
         SortField.dateModified => 'Date modified',
         SortField.format => 'Format',
         SortField.favorite => 'Favorites first',
+        SortField.priority => 'Priority',
+        SortField.nextUp => 'Next up',
       };
 }
 
@@ -58,6 +62,7 @@ class AppSettings extends ChangeNotifier {
   int? _monthlyGoal;
   ThemeMode _themeMode = ThemeMode.system;
   bool _pureBlack = false;
+  bool _paperLight = false;
   bool _backupReminder = true;
   int _backupDays = 30;
   bool _syncEnabled = false;
@@ -106,6 +111,9 @@ class AppSettings extends ChangeNotifier {
 
   /// Use true black instead of dark grey in dark mode.
   bool get pureBlack => _pureBlack;
+
+  /// A warm, cream page colour instead of white in light mode.
+  bool get paperLight => _paperLight;
 
   bool get backupReminder => _backupReminder;
 
@@ -180,6 +188,7 @@ class AppSettings extends ChangeNotifier {
         ThemeMode.values.asNameMap()[prefs.getString('themeMode')] ??
             ThemeMode.system;
     settings._pureBlack = prefs.getBool('pureBlack') ?? false;
+    settings._paperLight = prefs.getBool('paperLight') ?? false;
     settings._backupReminder = prefs.getBool('backupReminder') ?? true;
     settings._backupDays = prefs.getInt('backupDays') ?? 30;
     settings._syncEnabled = prefs.getBool('syncEnabled') ?? false;
@@ -385,7 +394,8 @@ class AppSettings extends ChangeNotifier {
       _sortField = field;
       _ascending = field == SortField.title ||
           field == SortField.author ||
-          field == SortField.format;
+          field == SortField.format ||
+          field == SortField.nextUp;
     }
     _save();
     notifyListeners();
@@ -420,6 +430,12 @@ class AppSettings extends ChangeNotifier {
   void setPureBlack(bool value) {
     _pureBlack = value;
     prefs?.setBool('pureBlack', value);
+    notifyListeners();
+  }
+
+  void setPaperLight(bool value) {
+    _paperLight = value;
+    prefs?.setBool('paperLight', value);
     notifyListeners();
   }
 

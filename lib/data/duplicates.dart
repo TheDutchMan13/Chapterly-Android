@@ -126,6 +126,12 @@ Book _absorb(Book base, Book other) {
         ? () => other.currentPage
         : null,
     aspectRatings: {...other.aspectRatings, ...base.aspectRatings},
+    priority: base.priority == null && other.priority != null
+        ? () => other.priority
+        : null,
+    buyAt: !_hasText(base.buyAt) && _hasText(other.buyAt)
+        ? () => other.buyAt
+        : null,
     notes: () => notes,
     isbn: base.isbn == null && other.isbn != null ? () => other.isbn : null,
     coverUrl: base.coverUrl == null && other.coverUrl != null

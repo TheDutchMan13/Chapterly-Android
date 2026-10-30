@@ -41,6 +41,9 @@ const fontChoices = [
   FontChoice('Cursive', 'cursive'),
 ];
 
+/// A warm, cream page colour for the paper look in light mode.
+const paperColor = Color(0xFFF6EEDC);
+
 /// The app theme for the chosen accent colour and font.
 ThemeData buildTheme(AppSettings settings, Brightness brightness) {
   final scheme = ColorScheme.fromSeed(
@@ -48,9 +51,25 @@ ThemeData buildTheme(AppSettings settings, Brightness brightness) {
     brightness: brightness,
   );
   final black = brightness == Brightness.dark && settings.pureBlack;
+  final paper = brightness == Brightness.light && settings.paperLight;
+  final background = black
+      ? Colors.black
+      : paper
+          ? paperColor
+          : null;
   return ThemeData(
-    colorScheme: black ? scheme.copyWith(surface: Colors.black) : scheme,
-    scaffoldBackgroundColor: black ? Colors.black : null,
+    colorScheme: paper
+        ? scheme.copyWith(
+            surface: paperColor,
+            surfaceContainerLow: const Color(0xFFF1E7D0),
+            surfaceContainer: const Color(0xFFEDE2C8),
+            surfaceContainerHigh: const Color(0xFFE8DCBF),
+            surfaceContainerHighest: const Color(0xFFE3D6B7),
+          )
+        : black
+            ? scheme.copyWith(surface: Colors.black)
+            : scheme,
+    scaffoldBackgroundColor: background,
     fontFamily: settings.fontFamily,
     useMaterial3: true,
   );

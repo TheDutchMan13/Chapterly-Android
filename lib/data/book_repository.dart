@@ -6,6 +6,9 @@ import '../models/quote.dart';
 import '../models/rating_aspect.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
+import '../models/wish_priority.dart';
+import 'app_settings.dart';
+import 'book_sorting.dart';
 import 'book_store.dart';
 import 'duplicates.dart';
 
@@ -78,6 +81,9 @@ Book _withShelf(Book book, Shelf shelf) {
     finishedAt: shelf == Shelf.finished && book.finishedAt == null
         ? () => now
         : null,
+    // Only books on For later have a place in the Next up order.
+    queuePosition:
+        shelf != Shelf.forLater && book.queuePosition != null ? () => null : null,
   );
 }
 
@@ -281,6 +287,59 @@ class BookRepository extends ChangeNotifier {
         }
         return book.copyWith(aspectRatings: ratings);
       });
+
+  /// How much you want to read a book on the For later shelf. Null clears it.
+  Future<void> setPriority(String id, WishPriority? priority) =>
+      _update(id, (book) => book.copyWith(priority: () => priority));
+
+  /// Sets the priority of every book in [ids].
+  Future<void> setPriorityAll(Set<String> ids, WishPriority? priority) =>
+      _updateMany(ids, (book) => book.copyWith(priority: () => priority));
+
+  /// Where to buy or borrow a book: a shop, a library or a web link.
+  /// Empty text clears it.
+  Future<void> setBuyAt(String id, String? text) {
+    final clean = text?.trim();
+    return _update(
+      id,
+      (book) => book.copyWith(
+        buyAt: () => clean == null || clean.isEmpty ? null : clean,
+      ),
+    );
+  }
+
+  /// The For later books in the order you will read them.
+  List<Book> get nextUp =>
+      sortBooks(booksOn(Shelf.forLater), SortField.nextUp, ascending: true);
+
+  /// Saves the order of the For later books: the first id is read first.
+  Future<void> setQueueOrder(List<String> orderedIds) async {
+    final place = {
+      for (var i = 0; i < orderedIds.length; i++) orderedIds[i]: i,
+    };
+    final changed = <Book>[];
+    final stamp = DateTime.now();
+    for (var i = 0; i < _books.length; i++) {
+      final position = place[_books[i].id];
+      if (position == null || _books[i].queuePosition == position) continue;
+      final updated = _books[i].copyWith(
+        queuePosition: () => position,
+        updatedAt: stamp,
+      );
+      _books[i] = updated;
+      changed.add(updated);
+    }
+    if (changed.isEmpty) return;
+    notifyListeners();
+    await _store.saveAll(changed);
+  }
+
+  /// Puts a For later book first in the Next up order.
+  Future<void> moveToTopOfQueue(String id) => setQueueOrder([
+        id,
+        for (final book in nextUp)
+          if (book.id != id) book.id,
+      ]);
 
   Future<void> setPages(String id, int? pages) =>
       _update(id, (book) => book.copyWith(pages: () => pages));

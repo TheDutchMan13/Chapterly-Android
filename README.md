@@ -40,7 +40,10 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   (custom covers are files on the phone and are not part of the backup)
 - CSV export, and CSV import from Goodreads or a Chapterly CSV
 - Choose your accent colour and font (Settings > Appearance)
-- Light, dark or phone-following theme, with an optional pure black dark mode
+- Light, dark or phone-following theme, with an optional pure black dark mode,
+  a paper look (warm cream pages) for light mode, and a custom accent colour
+- Wishlist: give For later books a priority and a note of where to get them,
+  and put them in your own reading order (Next up)
 - Backup reminder: a banner asks for a new backup after 2 weeks to 3 months
   (your choice, or switch it off)
 - Defaults for new books (Settings > Adding books): the shelf (or ask every

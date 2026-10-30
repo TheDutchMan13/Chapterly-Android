@@ -59,6 +59,8 @@ Fields (all optional except `id`, `title`, `shelf`, `addedAt`, `updatedAt`):
     collections (list of shelf names),
     quotes (list of {text, page, addedAt}),
     currentPage, aspectRatings ({"plot" | "characters" | "writing" | "pacing": 1-5}),
+    priority ("low" | "medium" | "high"), buyAt (shop, library or link),
+    queuePosition (place in the Next up order, 0 is first),
     readingLog (list of {date, pages, minutes}),
     previousReadings (list of {startedAt, finishedAt, rating, log})
 

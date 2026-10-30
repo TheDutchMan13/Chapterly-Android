@@ -11,11 +11,13 @@ import '../data/rating_text.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
+import '../models/wish_priority.dart';
 import '../widgets/book_cover.dart';
 import 'add_book_dialog.dart';
 import 'book_detail_screen.dart';
 import 'duplicates_screen.dart';
 import 'manage_shelves_screen.dart';
+import 'next_up_screen.dart';
 import 'read_next_screen.dart';
 import 'scan_screen.dart';
 import 'search_screen.dart';
@@ -176,6 +178,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  void _openNextUp() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NextUpScreen(
+          repository: widget.repository,
+          settings: widget.settings,
+          fileIo: widget.fileIo,
+        ),
+      ),
+    );
+  }
+
   void _openDuplicates() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -322,6 +336,45 @@ class _LibraryScreenState extends State<LibraryScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text('Changed the format of ${ids.length} '
+            'book${ids.length == 1 ? '' : 's'}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => widget.repository.putBack(before),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setPrioritySelected() async {
+    final choice = await showDialog<List<WishPriority?>>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Set priority'),
+        children: [
+          for (final priority in WishPriority.values.reversed)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop([priority]),
+              child: Text(priority.label),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop([null]),
+            child: const Text('Not set'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final ids = {..._selected};
+    final before = [
+      for (final id in ids) ?widget.repository.byId(id),
+    ];
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.repository.setPriorityAll(ids, choice.first);
+    if (!mounted) return;
+    setState(_selected.clear);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Changed the priority of ${ids.length} '
             'book${ids.length == 1 ? '' : 's'}'),
         action: SnackBarAction(
           label: 'Undo',
@@ -601,6 +654,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 value: _changeAuthorSelected,
                 child: const Text('Change author'),
               ),
+              PopupMenuItem(
+                value: _setPrioritySelected,
+                child: const Text('Set priority'),
+              ),
             ],
           ),
         ],
@@ -673,6 +730,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             PopupMenuItem(
               value: _openStatistics,
               child: const Text('Statistics'),
+            ),
+            PopupMenuItem(
+              value: _openNextUp,
+              child: const Text('Next up (reading order)'),
             ),
             PopupMenuItem(
               value: _openReadNext,
@@ -922,10 +983,13 @@ class _ShelfList extends StatelessWidget {
   List<String> _subtitleLines(Book book) {
     final format = book.format;
     final rating = book.rating;
+    final priority = book.priority;
     final first = [
       if (book.author.isNotEmpty) book.author,
       if (showFormat && format != null) format.label,
       if (rating != null) ratingText(rating, asNumber: ratingAsNumber),
+      if (book.shelf == Shelf.forLater && priority != null)
+        '${priority.label} priority',
       if (book.shelf == Shelf.inProgress && book.progress != null)
         '${(book.progress! * 100).round()}% read',
     ].join(' · ');

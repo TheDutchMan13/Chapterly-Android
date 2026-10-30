@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
@@ -14,10 +15,12 @@ import '../models/book_format.dart';
 import '../models/rating_aspect.dart';
 import '../models/reading.dart';
 import '../models/shelf.dart';
+import '../models/wish_priority.dart';
 import '../widgets/book_cover.dart';
 import 'author_books_screen.dart';
 import 'book_card_screen.dart';
 import 'log_entry_dialog.dart';
+import 'next_up_screen.dart';
 import 'similar_books_screen.dart';
 import 'subject_books_screen.dart';
 
@@ -117,6 +120,108 @@ class BookDetailScreen extends StatelessWidget {
     );
     if (text == null) return;
     await repository.setCurrentPage(book.id, int.tryParse(text.trim()));
+  }
+
+  Future<void> _editPriority(BuildContext context, Book book) async {
+    final choice = await showDialog<List<WishPriority?>>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Priority'),
+        children: [
+          for (final priority in WishPriority.values.reversed)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop([priority]),
+              child: Text(priority.label),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop([null]),
+            child: const Text('Not set'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    await repository.setPriority(book.id, choice.first);
+  }
+
+  Future<void> _editBuyAt(BuildContext context, Book book) async {
+    final text = await _askText(
+      context,
+      title: 'Where to get it',
+      initial: book.buyAt ?? '',
+      label: 'Shop, library or web link',
+      helper: 'For example "Library" or a web address. Leave empty to clear',
+    );
+    if (text == null) return;
+    await repository.setBuyAt(book.id, text);
+  }
+
+  Future<void> _openBuyLink(BuildContext context, Book book) async {
+    final link = book.buyLink;
+    if (link == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final opened = await launchUrl(link, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the link.')),
+      );
+    }
+  }
+
+  void _openNextUp(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NextUpScreen(
+          repository: repository,
+          settings: settings,
+          fileIo: fileIo,
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _wishlistTiles(BuildContext context, Book book) {
+    final queue = repository.nextUp;
+    final place = queue.indexWhere((other) => other.id == book.id);
+    return [
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.flag_outlined),
+        title: const Text('Priority'),
+        subtitle: Text(book.priority?.label ?? 'Not set'),
+        onTap: () => _editPriority(context, book),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.storefront_outlined),
+        title: const Text('Where to get it'),
+        subtitle: Text(book.buyAt ?? 'Not set'),
+        trailing: book.buyLink == null
+            ? null
+            : IconButton(
+                tooltip: 'Open link',
+                icon: const Icon(Icons.open_in_new),
+                onPressed: () => _openBuyLink(context, book),
+              ),
+        onTap: () => _editBuyAt(context, book),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.format_list_numbered),
+        title: const Text('Next up'),
+        subtitle: Text(
+          place < 0 ? 'Not in the queue' : 'Number ${place + 1} of ${queue.length}',
+        ),
+        trailing: place > 0
+            ? IconButton(
+                tooltip: 'Read this next',
+                icon: const Icon(Icons.vertical_align_top),
+                onPressed: () => repository.moveToTopOfQueue(book.id),
+              )
+            : null,
+        onTap: () => _openNextUp(context),
+      ),
+    ];
   }
 
   String _progressText(Book book) {
@@ -737,6 +842,7 @@ class BookDetailScreen extends StatelessWidget {
                 subtitle: Text(book.pages?.toString() ?? 'Not set'),
                 onTap: () => _editPages(context, book),
               ),
+              if (book.shelf == Shelf.forLater) ..._wishlistTiles(context, book),
               if (book.shelf == Shelf.inProgress)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
