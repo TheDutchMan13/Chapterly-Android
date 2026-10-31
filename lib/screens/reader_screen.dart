@@ -5,11 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_epub_viewer/flutter_epub_viewer.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/book_repository.dart';
+import '../ebook/android_reader_device.dart';
 import '../ebook/ebook_library.dart';
+import '../ebook/reader_stats.dart';
 import '../ebook/reader_style.dart';
+import '../ebook/reader_tools.dart';
 import '../models/book.dart';
+import '../models/shelf.dart';
+import 'reader_widgets.dart';
 
 /// Opens the reader for a book that has a book file on this device.
 void openReader(
@@ -30,9 +36,9 @@ void openReader(
 }
 
 /// Reads a book's EPUB or PDF file. Tap the middle of the page for the
-/// tools, the sides to turn the page. Where you are is saved, the book's
-/// current page is kept up to date, and the time you spend reading goes
-/// into the reading log.
+/// tools, the sides (or the volume buttons) to turn the page. Where you are
+/// is saved, the book's current page is kept up to date, and the time you
+/// spend reading goes into the reading log.
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({
     super.key,
@@ -55,12 +61,19 @@ class _ReaderScreenState extends State<ReaderScreen>
     with WidgetsBindingObserver {
   final _epub = EpubController();
   final _pdf = PdfViewerController();
+  late final _pdfSearch = PdfTextSearcher(_pdf);
+  late final List<PdfViewerPagePaintCallback> _pdfPaint = [
+    _pdfSearch.pageTextMatchPaintCallback,
+  ];
 
   bool _tools = false;
   EpubLocation? _location;
   List<EpubChapter> _chapters = const [];
   int? _pdfPage;
   int? _pdfPages;
+  PdfDocument? _pdfDocument;
+  List<PdfOutlineNode> _outline = const [];
+  String? _pdfSearchWords;
   EpubTextSelection? _selection;
   String? _problem;
   String? _initialLocations;
@@ -76,9 +89,21 @@ class _ReaderScreenState extends State<ReaderScreen>
   Duration _carried = Duration.zero;
   Timer? _logTimer;
 
+  /// The furthest place reached, and the new reading since the time was
+  /// last written down, for reading speed.
+  double _mark = 0;
+  double _newReading = 0;
+
+  bool _offeredFinish = false;
+  ReadAloud? _aloud;
+
+  /// Completed when the EPUB moves to another page.
+  Completer<void>? _turned;
+
   EbookLink? get _link => widget.library.linkFor(widget.bookId);
   Book? get _book => widget.repository.byId(widget.bookId);
-  ReaderPrefs get _prefs => widget.library.prefs;
+  ReaderPrefs get _prefs => widget.library.prefsFor(widget.bookId);
+  bool get _isPdf => _link?.format == EbookFormat.pdf;
 
   @override
   void initState() {
@@ -98,8 +123,13 @@ class _ReaderScreenState extends State<ReaderScreen>
         }
       }
     }
+    _mark = link?.position?.progress ?? 0;
     _reading.start();
     _logTimer = Timer.periodic(const Duration(minutes: 5), (_) => _logTime());
+    if (_problem == null) {
+      ReaderDevice.start(_prefs, onVolumeKey: _volumeKey);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _moveToReading());
+    }
   }
 
   @override
@@ -119,9 +149,13 @@ class _ReaderScreenState extends State<ReaderScreen>
     _saveTimer?.cancel();
     _logTimer?.cancel();
     _reading.stop();
+    _aloud?.dispose();
+    if (_isPdf) _pdfSearch.dispose();
+    ReaderDevice.stop();
     final position = _unsaved;
     _unsaved = null;
     final minutes = _takeMinutes();
+    final read = minutes > 0 ? _takeReading() : 0.0;
     final repository = widget.repository;
     final library = widget.library;
     final bookId = widget.bookId;
@@ -134,6 +168,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           bookId: bookId,
           position: position,
           minutes: minutes,
+          read: read,
           now: now,
         ));
     super.dispose();
@@ -144,12 +179,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     _saveTimer?.cancel();
     final position = _unsaved;
     _unsaved = null;
+    final minutes = _takeMinutes();
     _writeOut(
       repository: widget.repository,
       library: widget.library,
       bookId: widget.bookId,
       position: position,
-      minutes: _takeMinutes(),
+      minutes: minutes,
+      read: minutes > 0 ? _takeReading() : 0,
       now: widget.now(),
     );
   }
@@ -164,11 +201,22 @@ class _ReaderScreenState extends State<ReaderScreen>
     return minutes;
   }
 
+  double _takeReading() {
+    final read = _newReading;
+    _newReading = 0;
+    return read;
+  }
+
   void _logTime() {
     final minutes = _takeMinutes();
-    if (minutes > 0) {
-      widget.repository.addReadingMinutes(widget.bookId, widget.now(), minutes);
-    }
+    if (minutes <= 0) return;
+    widget.repository.addReadingMinutes(widget.bookId, widget.now(), minutes);
+    widget.library.addReaderTime(
+      widget.bookId,
+      widget.now(),
+      minutes: minutes,
+      progress: _takeReading(),
+    );
   }
 
   /// Saves the position, keeps the book's current page up to date and adds
@@ -179,6 +227,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     required String bookId,
     required EbookPosition? position,
     required int minutes,
+    required double read,
     required DateTime now,
   }) {
     if (position != null) {
@@ -199,13 +248,19 @@ class _ReaderScreenState extends State<ReaderScreen>
         }
       }
     }
-    if (minutes > 0) repository.addReadingMinutes(bookId, now, minutes);
+    if (minutes > 0) {
+      repository.addReadingMinutes(bookId, now, minutes);
+      library.addReaderTime(bookId, now, minutes: minutes, progress: read);
+    }
   }
 
   /// Remembers where you are, saving it a moment later so turning pages
   /// quickly does not write the file every time.
   void _moved(EbookPosition position) {
     _unsaved = position;
+    final step = newReading(_mark, position.progress);
+    _mark = step.mark;
+    _newReading += step.read;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(seconds: 2), () {
       final p = _unsaved;
@@ -213,12 +268,61 @@ class _ReaderScreenState extends State<ReaderScreen>
       _unsaved = null;
       widget.library.setPosition(widget.bookId, p);
     });
+    _checkEnd(position.progress);
   }
 
+  // ---- Shelves ----
+
+  /// Opening the book file of a book on For later (or Unfinished) moves it
+  /// to In progress, with a way to undo it.
+  Future<void> _moveToReading() async {
+    final book = _book;
+    if (book == null || !mounted) return;
+    final target = shelfOnOpen(book.shelf);
+    if (target == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.repository.moveTo(widget.bookId, target);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Moved to ${target.label}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => widget.repository.putBack([book]),
+        ),
+      ),
+    );
+  }
+
+  /// At the end of a book you are reading, offers to mark it finished.
+  void _checkEnd(double progress) {
+    if (_offeredFinish || !reachedEnd(progress) || !mounted) return;
+    final book = _book;
+    if (book == null || book.shelf != Shelf.inProgress) return;
+    _offeredFinish = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        content: const Text('You reached the end of the book.'),
+        action: SnackBarAction(label: 'Mark finished', onPressed: _markFinished),
+      ),
+    );
+  }
+
+  Future<void> _markFinished() async {
+    final book = _book;
+    if (book == null) return;
+    await widget.repository.moveTo(widget.bookId, Shelf.finished);
+    final pages = _isPdf ? (_pdfPages ?? book.pages) : book.pages;
+    if (pages != null && pages > 0) {
+      await widget.repository.setCurrentPage(widget.bookId, pages);
+    }
+  }
+
+  // ---- Where you are ----
+
   String? get _currentLocator {
-    final link = _link;
-    if (link == null) return null;
-    if (link.format == EbookFormat.pdf) {
+    if (_link == null) return null;
+    if (_isPdf) {
       final page = _pdfPage;
       return page == null ? null : '$page';
     }
@@ -227,7 +331,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   double get _progress {
     final link = _link;
-    if (link?.format == EbookFormat.pdf) {
+    if (_isPdf) {
       final page = _pdfPage;
       final pages = _pdfPages;
       if (page == null || pages == null || pages <= 1) return 0;
@@ -236,10 +340,31 @@ class _ReaderScreenState extends State<ReaderScreen>
     return _location?.progress ?? link?.position?.progress ?? 0;
   }
 
+  void _volumeKey(bool next) {
+    if (_selection != null || !mounted) return;
+    _turn(next ? 1 : -1);
+  }
+
+  /// The next (1) or previous (-1) page.
+  void _turn(int direction) {
+    if (_isPdf) {
+      final page = (_pdfPage ?? 1) + direction;
+      final pages = _pdfPages ?? 1;
+      if (page >= 1 && page <= pages) _pdf.goToPage(pageNumber: page);
+    } else if (direction > 0) {
+      _epub.next();
+    } else {
+      _epub.prev();
+    }
+  }
+
   // ---- EPUB ----
 
   void _epubRelocated(EpubLocation location) {
     setState(() => _location = location);
+    final turned = _turned;
+    if (turned != null && !turned.isCompleted) turned.complete();
+    _turned = null;
     _moved(EbookPosition(
       locator: location.startCfi,
       progress: location.progress,
@@ -249,9 +374,12 @@ class _ReaderScreenState extends State<ReaderScreen>
   void _epubLoaded() {
     final link = _link;
     if (link == null) return;
-    final colour = readerColors(_prefs.theme).highlight;
     for (final highlight in link.highlights) {
-      _epub.addHighlight(cfi: highlight.locator, color: colour, opacity: 0.4);
+      _epub.addHighlight(
+        cfi: highlight.locator,
+        color: highlightSwatch(highlight.colour),
+        opacity: 0.4,
+      );
     }
   }
 
@@ -301,7 +429,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
   }
 
-  Future<void> _saveQuote() async {
+  Future<void> _saveQuote(HighlightColour colour) async {
     final selection = _selection;
     final book = _book;
     if (selection == null || book == null) return;
@@ -309,7 +437,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final text = selection.selectedText.trim();
     _epub.addHighlight(
       cfi: selection.selectionCfi,
-      color: readerColors(_prefs.theme).highlight,
+      color: highlightSwatch(colour),
       opacity: 0.4,
     );
     _epub.clearSelection();
@@ -320,18 +448,26 @@ class _ReaderScreenState extends State<ReaderScreen>
         locator: selection.selectionCfi,
         text: text,
         addedAt: widget.now(),
+        colour: colour,
       ),
     );
-    final page = _link == null
+    final link = _link;
+    final page = link == null
         ? null
         : currentPageFor(
-            format: _link!.format,
+            format: link.format,
             progress: _progress,
             bookPages: book.pages,
           );
     await widget.repository.addQuote(widget.bookId, text, page: page);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Highlighted and saved to your quotes')),
+      SnackBar(
+        content: const Text('Highlighted and saved to your quotes'),
+        action: SnackBarAction(
+          label: 'Add a note',
+          onPressed: () => _editHighlight(selection.selectionCfi),
+        ),
+      ),
     );
   }
 
@@ -345,29 +481,56 @@ class _ReaderScreenState extends State<ReaderScreen>
     messenger.showSnackBar(const SnackBar(content: Text('Copied')));
   }
 
-  Future<void> _highlightTapped(String cfi) async {
-    final remove = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove this highlight?'),
-        content: const Text(
-          'The quote stays on the book page. You can remove it there.',
+  Future<void> _lookUp() async {
+    final text = _selection?.selectedText ?? '';
+    if (!canLookUp(text)) return;
+    final messenger = ScaffoldMessenger.of(context);
+    _epub.clearSelection();
+    setState(() => _selection = null);
+    try {
+      final opened = await launchUrl(
+        dictionaryUri(text),
+        mode: LaunchMode.inAppBrowserView,
+      );
+      if (!opened) throw StateError('not opened');
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the dictionary. Is there a browser?'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+      );
+    }
+  }
+
+  /// A tap on a highlight: change its colour or note, or remove it.
+  Future<void> _editHighlight(String cfi) async {
+    final link = _link;
+    if (link == null || !mounted) return;
+    final highlight =
+        link.highlights.where((h) => h.locator == cfi).firstOrNull;
+    if (highlight == null) return;
+    final edit = await showHighlightEditor(
+      context,
+      library: widget.library,
+      bookId: widget.bookId,
+      highlight: highlight,
     );
-    if (remove != true) return;
+    if (edit == null) return;
     _epub.removeHighlight(cfi: cfi);
-    await widget.library.removeHighlight(widget.bookId, cfi);
+    if (edit == HighlightEdit.changed) {
+      final updated = _link?.highlights.where((h) => h.locator == cfi);
+      final colour = updated?.firstOrNull?.colour ?? highlight.colour;
+      _epub.addHighlight(cfi: cfi, color: highlightSwatch(colour), opacity: 0.4);
+    }
+  }
+
+  void _footnote(EpubFootnote note) {
+    showFootnote(
+      context,
+      text: note.text,
+      label: note.linkText,
+      onGoToNote: () => _epub.display(cfi: note.href),
+    );
   }
 
   // ---- PDF ----
@@ -378,15 +541,109 @@ class _ReaderScreenState extends State<ReaderScreen>
     _moved(EbookPosition(locator: '$page', progress: _progress));
   }
 
-  void _pdfReady(PdfDocument document, PdfViewerController controller) {
+  Future<void> _pdfReady(
+    PdfDocument document,
+    PdfViewerController controller,
+  ) async {
     final pages = document.pages.length;
-    setState(() => _pdfPages = pages);
+    setState(() {
+      _pdfPages = pages;
+      _pdfDocument = document;
+    });
     widget.library.setPageCount(widget.bookId, pages);
     // A PDF's pages are the book's pages when it has none written down.
     final book = _book;
     if (book != null && book.pages == null && pages > 0) {
       widget.repository.setPages(widget.bookId, pages);
     }
+    try {
+      final outline = await document.loadOutline();
+      if (mounted) setState(() => _outline = outline);
+    } catch (_) {
+      // No contents list in this PDF.
+    }
+  }
+
+  Future<void> _searchPdf() async {
+    final words = await askForSearchWords(context);
+    if (words == null || !mounted) return;
+    _pdfSearch.startTextSearch(words, goToFirstMatch: true);
+    setState(() {
+      _pdfSearchWords = words;
+      _tools = false;
+    });
+  }
+
+  void _closePdfSearch() {
+    _pdfSearch.resetTextSearch();
+    setState(() => _pdfSearchWords = null);
+  }
+
+  // ---- Reading aloud ----
+
+  Future<void> _toggleReadAloud() async {
+    var aloud = _aloud;
+    if (aloud == null) {
+      aloud = _aloud = ReadAloud(AndroidSpeaker());
+      aloud.addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+    if (aloud.playing) {
+      await aloud.stop();
+      return;
+    }
+    await aloud.setRate(_prefs.speechRate);
+    final first = await _pageText();
+    if (!mounted) return;
+    setState(() => _tools = false);
+    unawaited(aloud.start(pieces: first ?? const [], more: _nextPageText));
+  }
+
+  /// The words on the page you are on, ready to read aloud.
+  Future<List<String>?> _pageText() async {
+    try {
+      if (_isPdf) {
+        final document = _pdfDocument;
+        final page = _pdfPage ?? 1;
+        if (document == null || page < 1 || page > document.pages.length) {
+          return null;
+        }
+        final text = await document.pages[page - 1].loadStructuredText();
+        return speechChunks(text.fullText);
+      }
+      final result = await _epub.extractCurrentPageText();
+      return speechChunks(result.text ?? '');
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Turns the page and gives its words, or null at the end of the book.
+  Future<List<String>?> _nextPageText() async {
+    if (!mounted) return null;
+    if (_isPdf) {
+      final page = _pdfPage ?? 1;
+      final pages = _pdfPages ?? 0;
+      if (page >= pages) return null;
+      await _pdf.goToPage(pageNumber: page + 1);
+      _pdfPage = page + 1;
+      return _pageText();
+    }
+    final before = _location?.startCfi;
+    final turned = _turned = Completer<void>();
+    _epub.next();
+    try {
+      await turned.future.timeout(const Duration(seconds: 4));
+    } on TimeoutException {
+      return null;
+    }
+    if (!mounted || _location?.startCfi == before) return null;
+    return _pageText();
+  }
+
+  Future<void> _setSpeechRate(double rate) async {
+    await _applyPrefs(_prefs.copyWith(speechRate: rate));
   }
 
   // ---- Tools ----
@@ -400,7 +657,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       widget.library.removeBookmark(widget.bookId, locator);
       return;
     }
-    final label = link.format == EbookFormat.pdf
+    final label = _isPdf
         ? 'Page $locator'
         : _pageLabel() ?? percentText(_progress);
     widget.library.addBookmark(
@@ -432,9 +689,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _goTo(String locator) {
-    final link = _link;
-    if (link == null) return;
-    if (link.format == EbookFormat.pdf) {
+    if (_link == null) return;
+    if (_isPdf) {
       final page = int.tryParse(locator);
       if (page != null) _pdf.goToPage(pageNumber: page);
     } else {
@@ -443,9 +699,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _goToProgress(double value) {
-    final link = _link;
-    if (link == null) return;
-    if (link.format == EbookFormat.pdf) {
+    if (_link == null) return;
+    if (_isPdf) {
       final pages = _pdfPages;
       if (pages == null || pages <= 0) return;
       _pdf.goToPage(pageNumber: 1 + (value * (pages - 1)).round());
@@ -456,9 +711,22 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Future<void> _applyPrefs(ReaderPrefs prefs) async {
     final old = _prefs;
-    await widget.library.setPrefs(prefs);
+    await widget.library.applyPrefs(widget.bookId, prefs);
     if (!mounted) return;
     setState(() {});
+    await _prefsChanged(old, _prefs);
+  }
+
+  /// Puts changed settings into effect.
+  Future<void> _prefsChanged(ReaderPrefs old, ReaderPrefs prefs) async {
+    if (prefs.keepScreenOn != old.keepScreenOn ||
+        prefs.brightness != old.brightness ||
+        prefs.volumeKeys != old.volumeKeys) {
+      await ReaderDevice.apply(prefs);
+    }
+    if (prefs.speechRate != old.speechRate) {
+      await _aloud?.setRate(prefs.speechRate);
+    }
     if (_link?.format != EbookFormat.epub) return;
     if (prefs.fontSize != old.fontSize) {
       await _epub.setFontSize(fontSize: prefs.fontSize.toDouble());
@@ -476,15 +744,26 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _showAppearance() {
-    final pdf = _link?.format == EbookFormat.pdf;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => _AppearanceSheet(
-        library: widget.library,
-        pdf: pdf,
-        onChanged: _applyPrefs,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        builder: (context, scroll) => _AppearanceSheet(
+          library: widget.library,
+          bookId: widget.bookId,
+          pdf: _isPdf,
+          scroll: scroll,
+          onChanged: _applyPrefs,
+          onOwnLook: (own) async {
+            final old = _prefs;
+            await widget.library.setOwnLook(widget.bookId, own: own);
+            if (mounted) await _prefsChanged(old, _prefs);
+          },
+        ),
       ),
     );
   }
@@ -504,10 +783,15 @@ class _ReaderScreenState extends State<ReaderScreen>
           library: widget.library,
           bookId: widget.bookId,
           chapters: link.format == EbookFormat.epub ? _chapters : const [],
+          outline: link.format == EbookFormat.pdf ? _outline : const [],
           scroll: scroll,
           onGo: (locator) {
             Navigator.of(sheetContext).pop();
             _goTo(locator);
+          },
+          onEdit: (highlight) {
+            Navigator.of(sheetContext).pop();
+            _editHighlight(highlight.locator);
           },
         ),
       ),
@@ -515,33 +799,12 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   Future<void> _search() async {
-    final controller = TextEditingController();
-    final query = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Search in the book'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(labelText: 'Words to find'),
-          onSubmitted: (text) => Navigator.of(dialogContext).pop(text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('Search'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    final words = query?.trim() ?? '';
-    if (words.isEmpty || !mounted) return;
+    if (_isPdf) {
+      await _searchPdf();
+      return;
+    }
+    final words = await askForSearchWords(context);
+    if (words == null || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     List<EpubSearchResult> results;
     try {
@@ -615,6 +878,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             backgroundColor: colours.background,
             onPageChanged: _pdfPageChanged,
             onViewerReady: _pdfReady,
+            pagePaintCallbacks: _pdfPaint,
           ),
         ),
       );
@@ -643,7 +907,8 @@ class _ReaderScreenState extends State<ReaderScreen>
         onDeselection: () {
           if (_selection != null) setState(() => _selection = null);
         },
-        onAnnotationClicked: (cfi, rect) => _highlightTapped(cfi),
+        onAnnotationClicked: (cfi, rect) => _editHighlight(cfi),
+        onFootnoteTapped: _footnote,
         onLoadError: (error) => setState(
           () => _problem = 'This book file could not be opened. It may be '
               'damaged or locked (DRM).',
@@ -696,13 +961,12 @@ class _ReaderScreenState extends State<ReaderScreen>
                   ],
                 ),
               ),
-              if (link.format == EbookFormat.epub)
-                IconButton(
-                  tooltip: 'Search in the book',
-                  color: colours.foreground,
-                  icon: const Icon(Icons.search),
-                  onPressed: _search,
-                ),
+              IconButton(
+                tooltip: 'Search in the book',
+                color: colours.foreground,
+                icon: const Icon(Icons.search),
+                onPressed: _isPdf && _pdfDocument == null ? null : _search,
+              ),
               IconButton(
                 tooltip: marked ? 'Remove the bookmark' : 'Bookmark this page',
                 color: marked
@@ -730,6 +994,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       ?_pageLabel(),
     ];
     final textStyle = TextStyle(color: colours.muted, fontSize: 12);
+    final reading = _aloud?.playing ?? false;
     return Material(
       color: colours.bar,
       elevation: 2,
@@ -761,11 +1026,17 @@ class _ReaderScreenState extends State<ReaderScreen>
                 children: [
                   _ToolButton(
                     icon: Icons.format_list_bulleted,
-                    label: link.format == EbookFormat.epub
-                        ? 'Contents'
-                        : 'Bookmarks',
+                    label: 'Contents',
                     colour: colours.foreground,
                     onPressed: _showContents,
+                  ),
+                  _ToolButton(
+                    icon: reading
+                        ? Icons.stop_circle_outlined
+                        : Icons.record_voice_over_outlined,
+                    label: reading ? 'Stop reading' : 'Read aloud',
+                    colour: colours.foreground,
+                    onPressed: _toggleReadAloud,
                   ),
                   _ToolButton(
                     icon: Icons.text_fields,
@@ -785,6 +1056,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   Widget _selectionBar(ReaderColors colours) {
+    final text = _selection?.selectedText;
     return Material(
       color: colours.bar,
       elevation: 4,
@@ -794,11 +1066,21 @@ class _ReaderScreenState extends State<ReaderScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextButton.icon(
-              onPressed: _saveQuote,
-              icon: const Icon(Icons.format_quote),
-              label: const Text('Highlight and save quote'),
-            ),
+            for (final colour in HighlightColour.values)
+              HighlightDot(
+                colour: colour,
+                tooltip: 'Highlight in ${colour.label.toLowerCase()} and '
+                    'save the quote',
+                onTap: () => _saveQuote(colour),
+              ),
+            const SizedBox(width: 4),
+            if (showLookUp(text))
+              IconButton(
+                tooltip: 'Look up',
+                color: colours.foreground,
+                icon: const Icon(Icons.menu_book_outlined),
+                onPressed: _lookUp,
+              ),
             IconButton(
               tooltip: 'Copy',
               color: colours.foreground,
@@ -837,6 +1119,8 @@ class _ReaderScreenState extends State<ReaderScreen>
         final overlay = colours.isDark
             ? SystemUiOverlayStyle.light
             : SystemUiOverlayStyle.dark;
+        final aloud = _aloud;
+        final searchWords = _pdfSearchWords;
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlay,
           child: Scaffold(
@@ -860,6 +1144,23 @@ class _ReaderScreenState extends State<ReaderScreen>
                     bottom: 0,
                     child: _bottomBar(link, colours),
                   ),
+                if (searchWords != null && !_tools)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    top: 8,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Center(
+                        child: PdfSearchBar(
+                          searcher: _pdfSearch,
+                          words: searchWords,
+                          colours: colours,
+                          onClose: _closePdfSearch,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (_selection != null)
                   Positioned(
                     left: 16,
@@ -868,6 +1169,23 @@ class _ReaderScreenState extends State<ReaderScreen>
                     child: SafeArea(
                       top: false,
                       child: Center(child: _selectionBar(colours)),
+                    ),
+                  )
+                else if (aloud != null && aloud.playing && !_tools)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 24,
+                    child: SafeArea(
+                      top: false,
+                      child: Center(
+                        child: ReadAloudBar(
+                          colours: colours,
+                          rate: _prefs.speechRate,
+                          onStop: aloud.stop,
+                          onRate: _setSpeechRate,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -936,7 +1254,12 @@ class _ToolButton extends StatelessWidget {
             children: [
               Icon(icon, color: colour),
               const SizedBox(height: 4),
-              Text(label, style: TextStyle(color: colour, fontSize: 12)),
+              Text(
+                label,
+                style: TextStyle(color: colour, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -945,18 +1268,25 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-/// Text size, theme, typeface, spacing and how pages turn. A PDF only
-/// takes the theme (the colour around the pages).
+/// Text size, theme, typeface, spacing and how pages turn (a PDF only
+/// takes the theme), and the phone settings: screen, brightness, volume
+/// buttons and the reading-aloud speed.
 class _AppearanceSheet extends StatelessWidget {
   const _AppearanceSheet({
     required this.library,
+    required this.bookId,
     required this.pdf,
+    required this.scroll,
     required this.onChanged,
+    required this.onOwnLook,
   });
 
   final EbookLibrary library;
+  final String bookId;
   final bool pdf;
+  final ScrollController scroll;
   final Future<void> Function(ReaderPrefs prefs) onChanged;
+  final Future<void> Function(bool own) onOwnLook;
 
   Widget _segments<T>({
     required List<(T, String)> choices,
@@ -980,101 +1310,159 @@ class _AppearanceSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: library,
       builder: (context, _) {
-        final prefs = library.prefs;
+        final prefs = library.prefsFor(bookId);
+        final own = library.hasOwnLook(bookId);
         Widget label(String text) => Padding(
               padding: const EdgeInsets.only(top: 16, bottom: 8),
               child: Text(text, style: textTheme.labelLarge),
             );
+        final brightness = prefs.brightness;
         return SafeArea(
-          child: SingleChildScrollView(
+          child: ListView(
+            controller: scroll,
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  pdf ? 'Theme' : 'Text and theme',
-                  style: textTheme.titleLarge,
+            children: [
+              Text(
+                pdf ? 'Theme' : 'Text and theme',
+                style: textTheme.titleLarge,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only for this book'),
+                subtitle: Text(
+                  own
+                      ? 'Changes to the text and theme are kept for this '
+                          'book.'
+                      : 'Changes to the text and theme apply to every book.',
                 ),
-                if (!pdf) ...[
-                  label('Text size'),
-                  Row(
-                    children: [
-                      const Text('A', style: TextStyle(fontSize: 14)),
-                      Expanded(
-                        child: Slider(
-                          value: prefs.fontSize.toDouble(),
-                          min: ReaderPrefs.minFontSize.toDouble(),
-                          max: ReaderPrefs.maxFontSize.toDouble(),
-                          divisions:
-                              ReaderPrefs.maxFontSize - ReaderPrefs.minFontSize,
-                          label: '${prefs.fontSize}',
-                          onChanged: (v) =>
-                              onChanged(prefs.copyWith(fontSize: v.round())),
-                        ),
-                      ),
-                      const Text('A', style: TextStyle(fontSize: 26)),
-                    ],
-                  ),
-                ],
-                label('Theme'),
+                value: own,
+                onChanged: onOwnLook,
+              ),
+              if (!pdf) ...[
+                label('Text size'),
                 Row(
                   children: [
-                    for (final theme in ReaderTheme.values)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: _ThemeChoice(
-                            theme: theme,
-                            selected: prefs.theme == theme,
-                            onTap: () =>
-                                onChanged(prefs.copyWith(theme: theme)),
-                          ),
-                        ),
+                    const Text('A', style: TextStyle(fontSize: 14)),
+                    Expanded(
+                      child: Slider(
+                        value: prefs.fontSize.toDouble(),
+                        min: ReaderPrefs.minFontSize.toDouble(),
+                        max: ReaderPrefs.maxFontSize.toDouble(),
+                        divisions:
+                            ReaderPrefs.maxFontSize - ReaderPrefs.minFontSize,
+                        label: '${prefs.fontSize}',
+                        onChanged: (v) =>
+                            onChanged(prefs.copyWith(fontSize: v.round())),
                       ),
+                    ),
+                    const Text('A', style: TextStyle(fontSize: 26)),
                   ],
                 ),
-                if (!pdf) ...[
-                  label('Typeface'),
-                  _segments<ReaderFont>(
-                    choices: const [
-                      (ReaderFont.serif, 'Serif'),
-                      (ReaderFont.sans, 'Sans'),
-                    ],
-                    selected: prefs.font,
-                    onSelected: (font) => onChanged(prefs.copyWith(font: font)),
-                  ),
-                  label('Line spacing'),
-                  _segments<ReaderSpacing>(
-                    choices: [
-                      for (final s in ReaderSpacing.values)
-                        (s, readerSpacingLabel(s)),
-                    ],
-                    selected: prefs.lineSpacing,
-                    onSelected: (s) =>
-                        onChanged(prefs.copyWith(lineSpacing: s)),
-                  ),
-                  label('Margins'),
-                  _segments<ReaderSpacing>(
-                    choices: [
-                      for (final s in ReaderSpacing.values)
-                        (s, readerSpacingLabel(s)),
-                    ],
-                    selected: prefs.margins,
-                    onSelected: (s) => onChanged(prefs.copyWith(margins: s)),
-                  ),
-                  label('Turn pages by'),
-                  _segments<bool>(
-                    choices: const [
-                      (false, 'Tapping or swiping'),
-                      (true, 'Scrolling'),
-                    ],
-                    selected: prefs.scroll,
-                    onSelected: (scroll) =>
-                        onChanged(prefs.copyWith(scroll: scroll)),
-                  ),
-                ],
               ],
-            ),
+              label('Theme'),
+              Row(
+                children: [
+                  for (final theme in ReaderTheme.values)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _ThemeChoice(
+                          theme: theme,
+                          selected: prefs.theme == theme,
+                          onTap: () => onChanged(prefs.copyWith(theme: theme)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (!pdf) ...[
+                label('Typeface'),
+                _segments<ReaderFont>(
+                  choices: const [
+                    (ReaderFont.serif, 'Serif'),
+                    (ReaderFont.sans, 'Sans'),
+                  ],
+                  selected: prefs.font,
+                  onSelected: (font) => onChanged(prefs.copyWith(font: font)),
+                ),
+                label('Line spacing'),
+                _segments<ReaderSpacing>(
+                  choices: [
+                    for (final s in ReaderSpacing.values)
+                      (s, readerSpacingLabel(s)),
+                  ],
+                  selected: prefs.lineSpacing,
+                  onSelected: (s) => onChanged(prefs.copyWith(lineSpacing: s)),
+                ),
+                label('Margins'),
+                _segments<ReaderSpacing>(
+                  choices: [
+                    for (final s in ReaderSpacing.values)
+                      (s, readerSpacingLabel(s)),
+                  ],
+                  selected: prefs.margins,
+                  onSelected: (s) => onChanged(prefs.copyWith(margins: s)),
+                ),
+                label('Turn pages by'),
+                _segments<bool>(
+                  choices: const [
+                    (false, 'Tapping or swiping'),
+                    (true, 'Scrolling'),
+                  ],
+                  selected: prefs.scroll,
+                  onSelected: (scroll) =>
+                      onChanged(prefs.copyWith(scroll: scroll)),
+                ),
+              ],
+              const Divider(height: 32),
+              Text('Phone', style: textTheme.titleMedium),
+              label('Brightness'),
+              Row(
+                children: [
+                  const Icon(Icons.brightness_low, size: 20),
+                  Expanded(
+                    child: Slider(
+                      value: brightness ?? 0.5,
+                      min: 0.02,
+                      max: 1,
+                      onChanged: brightness == null
+                          ? null
+                          : (v) => onChanged(
+                                prefs.copyWith(brightness: () => v),
+                              ),
+                    ),
+                  ),
+                  const Icon(Icons.brightness_high, size: 20),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Use the phone's brightness"),
+                value: brightness == null,
+                onChanged: (system) => onChanged(
+                  prefs.copyWith(brightness: () => system ? null : 0.5),
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Keep the screen on'),
+                subtitle: const Text('While the reader is open'),
+                value: prefs.keepScreenOn,
+                onChanged: (on) => onChanged(prefs.copyWith(keepScreenOn: on)),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Volume buttons turn pages'),
+                subtitle: const Text('Down for the next page, up to go back'),
+                value: prefs.volumeKeys,
+                onChanged: (on) => onChanged(prefs.copyWith(volumeKeys: on)),
+              ),
+              label('Reading aloud speed'),
+              SpeechRateSlider(
+                rate: prefs.speechRate,
+                onChanged: (rate) => onChanged(prefs.copyWith(speechRate: rate)),
+              ),
+            ],
           ),
         );
       },
@@ -1138,21 +1526,25 @@ class _ThemeChoice extends StatelessWidget {
   }
 }
 
-/// Chapters (EPUB), bookmarks and highlights.
+/// Chapters (EPUB) or the PDF's contents, bookmarks and highlights.
 class _ContentsSheet extends StatelessWidget {
   const _ContentsSheet({
     required this.library,
     required this.bookId,
     required this.chapters,
+    required this.outline,
     required this.scroll,
     required this.onGo,
+    required this.onEdit,
   });
 
   final EbookLibrary library;
   final String bookId;
   final List<EpubChapter> chapters;
+  final List<PdfOutlineNode> outline;
   final ScrollController scroll;
   final ValueChanged<String> onGo;
+  final ValueChanged<EbookHighlight> onEdit;
 
   /// Chapters with their sub-chapters, one level of indent each.
   List<(EpubChapter, int)> _flatten(List<EpubChapter> items, int depth) => [
@@ -1165,18 +1557,29 @@ class _ContentsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final epub = chapters.isNotEmpty;
+    final pdfContents = outline.isNotEmpty;
     return ListenableBuilder(
       listenable: library,
       builder: (context, _) {
         final link = library.linkFor(bookId);
+        final isEpub = link?.format == EbookFormat.epub;
         final bookmarks = link?.bookmarks ?? const <EbookBookmark>[];
         final highlights = link?.highlights ?? const <EbookHighlight>[];
+        // The first tab gets the sheet's scrolling, so dragging it down
+        // closes the sheet.
+        var first = true;
+        ScrollController? takeScroll() {
+          if (!first) return null;
+          first = false;
+          return scroll;
+        }
+
         final tabs = <(String, Widget)>[
           if (epub)
             (
               'Chapters',
               ListView(
-                controller: scroll,
+                controller: takeScroll(),
                 children: [
                   for (final (chapter, depth) in _flatten(chapters, 0))
                     ListTile(
@@ -1190,6 +1593,15 @@ class _ContentsSheet extends StatelessWidget {
                 ],
               ),
             ),
+          if (pdfContents)
+            (
+              'Contents',
+              PdfOutlineList(
+                outline: outline,
+                controller: takeScroll(),
+                onPage: (page) => onGo('$page'),
+              ),
+            ),
           (
             'Bookmarks (${bookmarks.length})',
             bookmarks.isEmpty
@@ -1198,7 +1610,7 @@ class _ContentsSheet extends StatelessWidget {
                     'bookmark at the top.',
                   )
                 : ListView(
-                    controller: epub ? null : scroll,
+                    controller: takeScroll(),
                     children: [
                       for (final bookmark in bookmarks)
                         ListTile(
@@ -1218,7 +1630,7 @@ class _ContentsSheet extends StatelessWidget {
                     ],
                   ),
           ),
-          if (epub)
+          if (isEpub)
             (
               'Highlights (${highlights.length})',
               highlights.isEmpty
@@ -1229,17 +1641,10 @@ class _ContentsSheet extends StatelessWidget {
                   : ListView(
                       children: [
                         for (final highlight in highlights)
-                          ListTile(
-                            leading: const Icon(Icons.format_quote),
-                            title: Text(
-                              highlight.text,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                            onTap: () => onGo(highlight.locator),
+                          HighlightTile(
+                            highlight: highlight,
+                            onGo: () => onGo(highlight.locator),
+                            onEdit: () => onEdit(highlight),
                           ),
                       ],
                     ),

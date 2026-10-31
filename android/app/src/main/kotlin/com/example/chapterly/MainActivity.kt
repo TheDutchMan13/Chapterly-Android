@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.view.KeyEvent
+import android.view.WindowManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -22,6 +24,9 @@ import java.util.concurrent.Executors
  * permission is needed) and reads parts of them for lengths and chapters.
  * It also picks a book file (EPUB or PDF) and copies it into the app's own
  * folder for the reader.
+ *
+ * The "chapterly/reader" channel keeps the screen on, sets the brightness
+ * and turns the volume buttons into page turns while the reader is open.
  */
 class MainActivity : AudioServiceActivity() {
     private val pickFileCode = 4101
@@ -30,9 +35,40 @@ class MainActivity : AudioServiceActivity() {
     private var pending: MethodChannel.Result? = null
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+    private var reader: MethodChannel? = null
+    private var volumeKeys = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        reader = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "chapterly/reader")
+            .apply {
+                setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "keepScreenOn" -> {
+                            if (call.arguments == true) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            }
+                            result.success(null)
+                        }
+                        "brightness" -> {
+                            // A number from 0 to 1, or null for the phone's own.
+                            val value = (call.arguments as? Number)?.toFloat()
+                            val attributes = window.attributes
+                            attributes.screenBrightness = value?.coerceIn(0.01f, 1f)
+                                ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                            window.attributes = attributes
+                            result.success(null)
+                        }
+                        "volumeKeys" -> {
+                            volumeKeys = call.arguments == true
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "chapterly/audio_files")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -95,6 +131,21 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /** While the reader asks for it, the volume buttons turn pages. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (volumeKeys &&
+            (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                val direction = if (code == KeyEvent.KEYCODE_VOLUME_DOWN) "next" else "previous"
+                reader?.invokeMethod("volumeKey", direction)
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private val readFlags =

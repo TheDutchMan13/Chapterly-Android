@@ -13,6 +13,22 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.12.0',
+    date: '2026-10-31',
+    changes: [
+      'Highlights in four colours, with your own notes',
+      'Read aloud with the phone\'s voice, at the speed you like',
+      'Volume buttons turn pages; the screen stays on; brightness for the '
+          'reader',
+      'Footnotes open over the page; look up a word in the dictionary',
+      'PDFs: search and the PDF\'s own contents',
+      'Text and theme just for one book, if you like',
+      'Opening a book moves it to In progress, and the last page offers to '
+          'mark it finished',
+      'Statistics: time in the reader, reading speed and the longest streak',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.11.0',
     date: '2026-10-31',
     changes: [

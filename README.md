@@ -25,6 +25,10 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   Highlights are saved as quotes. The reader keeps the book's current page
   up to date and adds reading time to the reading log. Chapterly keeps its
   own copy of the file on the phone; it is not synced or backed up.
+  Also: highlights in four colours with notes, read aloud with the phone's
+  voice, volume buttons to turn pages, keep the screen on, brightness,
+  footnote pop-ups, dictionary look-up, PDF search and contents, a look of
+  its own for one book, and time in the reader in Statistics.
 - Re-reads: "Read again" saves the finished reading (dates, rating, log) under
   Earlier readings and starts a new one. Every finished reading counts in the
   statistics
