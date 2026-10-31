@@ -19,6 +19,12 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   (notification, lock screen, headphone buttons). Listening time goes into
   the reading log, and where you are syncs with the PC. The files are read
   through Android's file picker, so no storage permission is needed.
+- Reader: add a book's EPUB or PDF file and read it in Chapterly. Tap the
+  middle of the page for the tools: chapters, search, bookmarks, text size,
+  typeface, spacing, margins and four themes (paper, white, dark, black).
+  Highlights are saved as quotes. The reader keeps the book's current page
+  up to date and adds reading time to the reading log. Chapterly keeps its
+  own copy of the file on the phone; it is not synced or backed up.
 - Re-reads: "Read again" saves the finished reading (dates, rating, log) under
   Earlier readings and starts a new one. Every finished reading counts in the
   statistics

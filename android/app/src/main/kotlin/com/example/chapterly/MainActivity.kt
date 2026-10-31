@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
@@ -19,10 +20,13 @@ import java.util.concurrent.Executors
  * The "chapterly/audio_files" channel picks audiobook files and folders with
  * the system picker, keeps permission to read them (so no storage
  * permission is needed) and reads parts of them for lengths and chapters.
+ * It also picks a book file (EPUB or PDF) and copies it into the app's own
+ * folder for the reader.
  */
 class MainActivity : AudioServiceActivity() {
     private val pickFileCode = 4101
     private val pickFolderCode = 4102
+    private val pickBookCode = 4103
     private var pending: MethodChannel.Result? = null
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -44,6 +48,28 @@ class MainActivity : AudioServiceActivity() {
                             addFlags(readFlags)
                         }
                         startPicker(result, intent, pickFileCode)
+                    }
+                    "pickBook" -> {
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            // Some file managers do not mark .epub files.
+                            type = "*/*"
+                            putExtra(
+                                Intent.EXTRA_MIME_TYPES,
+                                arrayOf(
+                                    "application/epub+zip",
+                                    "application/pdf",
+                                    "application/octet-stream",
+                                ),
+                            )
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startPicker(result, intent, pickBookCode)
+                    }
+                    "copyTo" -> {
+                        val uri = Uri.parse(call.argument<String>("uri") ?: "")
+                        val path = call.argument<String>("path") ?: ""
+                        background(result) { copyTo(uri, path) }
                     }
                     "pickFolder" -> {
                         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
@@ -90,12 +116,22 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != pickFileCode && requestCode != pickFolderCode) return
+        if (requestCode != pickFileCode &&
+            requestCode != pickFolderCode &&
+            requestCode != pickBookCode
+        ) {
+            return
+        }
         val result = pending ?: return
         pending = null
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {
             result.success(null)
+            return
+        }
+        if (requestCode == pickBookCode) {
+            // Copied right away, so it needs no lasting permission.
+            result.success(listOf(mapOf("location" to uri.toString(), "name" to nameOf(uri))))
             return
         }
         try {
@@ -183,6 +219,18 @@ class MainActivity : AudioServiceActivity() {
                 }
                 buffer.array().copyOf(buffer.position())
             }
+        }
+    }
+
+    /** Copies a picked file to [path] in the app's folder. Returns its size. */
+    private fun copyTo(uri: Uri, path: String): Long {
+        if (path.isEmpty()) throw IllegalArgumentException("No place to copy to.")
+        val input = contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("Cannot open the file.")
+        val target = File(path)
+        target.parentFile?.mkdirs()
+        return input.use { source ->
+            target.outputStream().use { output -> source.copyTo(output) }
         }
     }
 

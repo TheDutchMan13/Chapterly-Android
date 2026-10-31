@@ -20,6 +20,7 @@ import '../widgets/book_cover.dart';
 import '../widgets/shelf_icon.dart';
 import 'author_books_screen.dart';
 import 'book_card_screen.dart';
+import 'book_file_card.dart';
 import 'listen_card.dart';
 import 'log_entry_dialog.dart';
 import 'next_up_screen.dart';
@@ -1065,6 +1066,7 @@ class BookDetailScreen extends StatelessWidget {
                         if (book.isbn != null) Text('ISBN ${book.isbn}'),
                       ]),
                       _section([
+                        BookFileCard(book: book, repository: repository),
                         ListenCard(book: book, repository: repository),
                         const SizedBox(height: 8),
                         _dateTile(context, book, start: true),

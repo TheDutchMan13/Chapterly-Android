@@ -18,6 +18,9 @@ import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
 import 'data/sqlite_book_store.dart';
 import 'data/theme_options.dart';
+import 'ebook/android_ebook_files.dart';
+import 'ebook/ebook_library.dart';
+import 'ebook/ebook_reading.dart';
 import 'screens/home_shell.dart';
 import 'screens/lock_gate.dart';
 import 'screens/now_playing.dart';
@@ -35,6 +38,7 @@ Future<void> main() async {
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
   await _setUpListening(repository);
+  await _setUpReading();
   runApp(
     ChapterlyApp(
       repository: repository,
@@ -89,6 +93,21 @@ class ChapterlyApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The reader: which book file belongs to which book on this phone, and
+/// the folder with Chapterly's copies of the files. If it fails, the app
+/// still opens without the reader.
+Future<void> _setUpReading() async {
+  try {
+    final dir = await getApplicationSupportDirectory();
+    EbookReading.library =
+        await EbookLibrary.load(File('${dir.path}/ebook_library.json'));
+    EbookReading.files = const AndroidEbookFiles();
+    EbookReading.booksDir = Directory('${dir.path}/books');
+  } catch (_) {
+    // No reader this time.
   }
 }
 
