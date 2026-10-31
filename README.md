@@ -29,6 +29,10 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   voice, volume buttons to turn pages, keep the screen on, brightness,
   footnote pop-ups, dictionary look-up, PDF search and contents, a look of
   its own for one book, and time in the reader in Statistics.
+- Add a book file or audiobook from the + button in the library: pick an
+  EPUB, PDF or audio file or folder and Chapterly links it to the right book
+  in your library from the title and author inside the file (or its name).
+  Pick another book, or add it as a new one, when it guesses wrong
 - Re-reads: "Read again" saves the finished reading (dates, rating, log) under
   Earlier readings and starts a new one. Every finished reading counts in the
   statistics

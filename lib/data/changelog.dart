@@ -13,6 +13,18 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.13.0',
+    date: '2026-10-31',
+    changes: [
+      'Add a book to read or an audiobook from the + button in the library: '
+          'pick an EPUB, PDF or audio file or folder and Chapterly finds its '
+          'book in your library from the title and author in the file or its '
+          'name',
+      'Pick another book if it guessed wrong, or add the file as a new book '
+          'with one tap',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.12.0',
     date: '2026-10-31',
     changes: [

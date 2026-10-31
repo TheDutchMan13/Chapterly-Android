@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../audio/listening.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/book_sorting.dart';
@@ -8,12 +9,14 @@ import '../data/file_io.dart';
 import '../data/open_library_client.dart';
 import '../data/phone_sync.dart';
 import '../data/rating_text.dart';
+import '../ebook/ebook_reading.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import '../models/wish_priority.dart';
 import '../widgets/book_cover.dart';
 import 'add_book_dialog.dart';
+import 'add_file_flow.dart';
 import 'book_detail_screen.dart';
 import 'cover_size_dialog.dart';
 import 'scan_screen.dart';
@@ -21,7 +24,7 @@ import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'shelf_picker.dart';
 
-enum _AddChoice { search, scan, manual }
+enum _AddChoice { search, scan, manual, bookFile, audioFile, audioFolder }
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -374,6 +377,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  /// Opens a book by id, such as one a file was just linked to.
+  void _openById(String id) {
+    if (!mounted) return;
+    final book = widget.repository.byId(id);
+    if (book != null && book.deletedAt == null) _openBook(book);
+  }
+
+  Future<void> _addFile(AddFileKind kind) => addFileToLibrary(
+        context,
+        repository: widget.repository,
+        kind: kind,
+        onLinked: _openById,
+      );
+
   void _openBook(Book book) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -422,6 +439,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
               title: const Text('Add manually'),
               onTap: () => Navigator.of(sheetContext).pop(_AddChoice.manual),
             ),
+            if (EbookReading.library != null || Listening.controller != null)
+              const Divider(height: 1),
+            // A file from this phone, linked to its book in your library.
+            if (EbookReading.library != null)
+              ListTile(
+                leading: const Icon(Icons.chrome_reader_mode_outlined),
+                title: const Text('Add a book to read'),
+                subtitle: const Text('EPUB or PDF file'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_AddChoice.bookFile),
+              ),
+            if (Listening.controller != null) ...[
+              ListTile(
+                leading: const Icon(Icons.headphones_outlined),
+                title: const Text('Add an audiobook'),
+                subtitle: const Text('One audio file, such as an M4B'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_AddChoice.audioFile),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: const Text('Add an audiobook folder'),
+                subtitle: const Text('A folder of audio files'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_AddChoice.audioFolder),
+              ),
+            ],
           ],
         ),
       ),
@@ -448,6 +492,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         await _addScanned(scanned);
       case _AddChoice.manual:
         await _addManually();
+      case _AddChoice.bookFile:
+        await _addFile(AddFileKind.book);
+      case _AddChoice.audioFile:
+        await _addFile(AddFileKind.audioFile);
+      case _AddChoice.audioFolder:
+        await _addFile(AddFileKind.audioFolder);
     }
   }
 
