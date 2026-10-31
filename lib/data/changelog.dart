@@ -13,6 +13,29 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.10.0',
+    date: '2026-10-30',
+    changes: [
+      'Audiobooks: add the audio for a book (one file, or a folder of files) '
+          'and listen to it in Chapterly',
+      'Keeps playing with the screen off, with controls in the notification, '
+          'on the lock screen and on headphones',
+      'Chapters from .m4b files, or one chapter per file in a folder',
+      'Skip 30 seconds, speed from 0.5x to 3x, and a sleep timer (or stop at '
+          'the end of the chapter)',
+      'Where you are in an audiobook syncs between the phone and the PC',
+      'Time spent listening is added to the reading log and statistics',
+      'Offers to move a book to Finished when you reach the end',
+      'A fuller player: a big cover, larger buttons, the chapter and how '
+          'much of the book is left',
+      'The book page is split into Overview, Reading and Notes, with the '
+          'cover, shelf and progress always at the top',
+      'A More tab in the bottom bar for Next up, Read next, your shelves, '
+          'duplicates, trash and settings, and how syncing with the PC is going',
+      'Choose the cover size for the grid view (View, then Cover size)',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.9.0',
     date: '2026-10-30',
     changes: [
@@ -21,6 +44,8 @@ const changelog = [
       'Sort by priority or by Next up, and set the priority of several books',
       'Pick any accent colour you like, not just the ready-made ones',
       'Paper look: a warm, cream page colour for light mode',
+      'A bar along the bottom to switch between your library and Statistics',
+      'Covers added on the PC show on the phone too',
     ],
   ),
   ChangelogEntry(

@@ -15,16 +15,11 @@ import '../models/wish_priority.dart';
 import '../widgets/book_cover.dart';
 import 'add_book_dialog.dart';
 import 'book_detail_screen.dart';
-import 'duplicates_screen.dart';
-import 'manage_shelves_screen.dart';
-import 'next_up_screen.dart';
-import 'read_next_screen.dart';
+import 'cover_size_dialog.dart';
 import 'scan_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'shelf_picker.dart';
-import 'statistics_screen.dart';
-import 'trash_screen.dart';
 
 enum _AddChoice { search, scan, manual }
 
@@ -166,49 +161,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _openReadNext() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ReadNextScreen(
-          repository: widget.repository,
-          settings: widget.settings,
-          fileIo: widget.fileIo,
-        ),
-      ),
-    );
-  }
-
-  void _openNextUp() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => NextUpScreen(
-          repository: widget.repository,
-          settings: widget.settings,
-          fileIo: widget.fileIo,
-        ),
-      ),
-    );
-  }
-
-  void _openDuplicates() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DuplicatesScreen(repository: widget.repository),
-      ),
-    );
-  }
-
-  void _openShelves() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ManageShelvesScreen(
-          repository: widget.repository,
-          settings: widget.settings,
-        ),
-      ),
-    );
-  }
-
   Future<void> _addSelectedToShelf() async {
     final names = allCollectionNames(widget.settings, widget.repository);
     final choice = await showDialog<String>(
@@ -262,14 +214,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
     await widget.repository.addToCollectionAll({..._selected}, name);
     if (mounted) setState(_selected.clear);
-  }
-
-  void _openTrash() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => TrashScreen(repository: widget.repository),
-      ),
-    );
   }
 
   /// Tapping a tag cycles it: off, shown, hidden, off.
@@ -443,18 +387,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _openStatistics() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => StatisticsScreen(
-          repository: widget.repository,
-          settings: widget.settings,
-          fileIo: widget.fileIo,
-        ),
-      ),
-    );
-  }
-
   void _openSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -602,6 +534,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         showFormat: widget.settings.showFormatOnCards,
         showTags: widget.settings.showTagsOnCards,
         ratingAsNumber: widget.settings.ratingAsNumber,
+        coverScale: widget.settings.coverScale,
       );
 
   List<String> get _collections =>
@@ -692,7 +625,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       );
     }
     return AppBar(
-      title: const Text('Chapterly'),
+      title: const Text('Library'),
       actions: [
         IconButton(
           tooltip: 'Search',
@@ -712,45 +645,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
           ],
         ),
-        IconButton(
-          tooltip: widget.settings.display == DisplayMode.grid
-              ? 'Show as list'
-              : 'Show as grid',
+        PopupMenuButton<DisplayMode>(
+          tooltip: 'View',
           icon: Icon(
             widget.settings.display == DisplayMode.grid
-                ? Icons.view_list
-                : Icons.grid_view,
+                ? Icons.grid_view
+                : Icons.view_list,
           ),
-          onPressed: widget.settings.toggleDisplay,
-        ),
-        PopupMenuButton<VoidCallback>(
-          tooltip: 'More',
-          onSelected: (action) => action(),
+          onSelected: (mode) {
+            if (mode != widget.settings.display) {
+              widget.settings.toggleDisplay();
+            }
+          },
           itemBuilder: (_) => [
-            PopupMenuItem(
-              value: _openStatistics,
-              child: const Text('Statistics'),
-            ),
-            PopupMenuItem(
-              value: _openNextUp,
-              child: const Text('Next up (reading order)'),
-            ),
-            PopupMenuItem(
-              value: _openReadNext,
-              child: const Text('What should I read next?'),
-            ),
-            PopupMenuItem(
-              value: _openShelves,
-              child: const Text('Your shelves'),
-            ),
-            PopupMenuItem(
-              value: _openDuplicates,
-              child: const Text('Find duplicates'),
-            ),
-            PopupMenuItem(value: _openTrash, child: const Text('Trash')),
-            PopupMenuItem(
-              value: _openSettings,
-              child: const Text('Settings'),
+            for (final (mode, label) in [
+              (DisplayMode.list, 'List'),
+              (DisplayMode.grid, 'Grid'),
+            ])
+              CheckedPopupMenuItem(
+                value: mode,
+                checked: widget.settings.display == mode,
+                child: Text(label),
+              ),
+            const PopupMenuDivider(),
+            PopupMenuItem<DisplayMode>(
+              onTap: () => showCoverSizeDialog(context, widget.settings),
+              child: const Text('Cover size...'),
             ),
           ],
         ),
@@ -967,6 +887,7 @@ class _ShelfList extends StatelessWidget {
     required this.showFormat,
     required this.showTags,
     required this.ratingAsNumber,
+    required this.coverScale,
   });
 
   final List<Book> books;
@@ -979,6 +900,9 @@ class _ShelfList extends StatelessWidget {
   final bool showFormat;
   final bool showTags;
   final bool ratingAsNumber;
+
+  /// How big the covers are in the grid; 1 is the normal size.
+  final double coverScale;
 
   List<String> _subtitleLines(Book book) {
     final format = book.format;
@@ -1019,11 +943,13 @@ class _ShelfList extends StatelessWidget {
 
     if (display == DisplayMode.grid) {
       final highlight = Theme.of(context).colorScheme.primaryContainer;
+      final coverWidth = 110 * coverScale;
+      final coverHeight = 160 * coverScale;
       return GridView.builder(
         padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 130,
-          mainAxisExtent: 220,
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: coverWidth + 20,
+          mainAxisExtent: coverHeight + 60,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
@@ -1042,8 +968,8 @@ class _ShelfList extends StatelessWidget {
                     children: [
                       BookCover(
                         coverUrl: book.coverUrl,
-                        width: 110,
-                        height: 160,
+                        width: coverWidth,
+                        height: coverHeight,
                       ),
                       if (book.favorite)
                         const Padding(

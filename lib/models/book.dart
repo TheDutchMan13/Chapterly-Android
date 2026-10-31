@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'audio_progress.dart';
 import 'book_format.dart';
 import 'quote.dart';
 import 'reading.dart';
@@ -74,6 +75,7 @@ class Book {
     this.priority,
     this.buyAt,
     this.queuePosition,
+    this.audio,
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? addedAt;
 
@@ -132,6 +134,9 @@ class Book {
 
   /// Place in your Next up order (0 is first). Null when not placed.
   final int? queuePosition;
+
+  /// Where you are in the audiobook, or null if you have not listened.
+  final AudioProgress? audio;
 
   /// [buyAt] as a web link, or null when it is plain text such as "Library".
   Uri? get buyLink {
@@ -202,6 +207,7 @@ class Book {
     WishPriority? Function()? priority,
     String? Function()? buyAt,
     int? Function()? queuePosition,
+    AudioProgress? Function()? audio,
     DateTime? updatedAt,
   }) =>
       Book(
@@ -237,6 +243,7 @@ class Book {
         buyAt: buyAt != null ? buyAt() : this.buyAt,
         queuePosition:
             queuePosition != null ? queuePosition() : this.queuePosition,
+        audio: audio != null ? audio() : this.audio,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -271,6 +278,10 @@ class Book {
         'priority': priority?.name,
         'buy_at': buyAt,
         'queue_position': queuePosition,
+        'audio': switch (audio) {
+          null => null,
+          final AudioProgress progress => jsonEncode(progress.toJson()),
+        },
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
 
@@ -303,6 +314,7 @@ class Book {
         priority: _priorityFromName(map['priority']),
         buyAt: map['buy_at'] as String?,
         queuePosition: map['queue_position'] as int?,
+        audio: AudioProgress.fromJson(_decode(map['audio'])),
         updatedAt: _dateFromMillis(map['updated_at']),
       );
 
@@ -336,6 +348,7 @@ class Book {
         'priority': priority?.name,
         'buyAt': buyAt,
         'queuePosition': queuePosition,
+        'audio': audio?.toJson(),
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -370,6 +383,7 @@ class Book {
         priority: _priorityFromName(json['priority']),
         buyAt: json['buyAt'] as String?,
         queuePosition: json['queuePosition'] as int?,
+        audio: AudioProgress.fromJson(json['audio']),
         updatedAt: _dateFromIso(json['updatedAt']),
       );
 }
