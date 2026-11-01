@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'pin_lock.dart';
+import 'quote_of_day.dart';
+import 'saved_filters.dart';
 
 enum SortField {
   dateAdded,
@@ -80,6 +82,14 @@ class AppSettings extends ChangeNotifier {
   final Map<int, int> _goals = {};
   final Map<int, int> _pageGoals = {};
   final Map<int, Map<String, int>> _tagGoals = {};
+  List<SavedFilter> _savedFilters = [];
+  bool _goalOnLibrary = true;
+  bool _smartRewind = true;
+  Set<String> _notDuplicates = {};
+  bool _quoteOnLibrary = true;
+  DateTime? _quoteHiddenOn;
+  Map<String, DateTime> _quoteSeen = {};
+  Map<String, DateTime> _stalledSnoozed = {};
   bool _autoBackup = false;
   int _autoBackupDays = 7;
   DateTime? _lastAutoBackupAt;
@@ -178,6 +188,37 @@ class AppSettings extends ChangeNotifier {
   /// How long the app can be in the background before it asks for the PIN.
   int get lockAfterSeconds => _lockAfterSeconds;
 
+  /// Filters saved under a name, shown at the start of the Library's
+  /// filter chips.
+  List<SavedFilter> get savedFilters => List.unmodifiable(_savedFilters);
+
+  /// Go back a few seconds when playing an audiobook again after a pause.
+  bool get smartRewind => _smartRewind;
+
+  /// Pairs of books you said are not the same (see PossibleDuplicate.key).
+  Set<String> get notDuplicates => Set.unmodifiable(_notDuplicates);
+
+  /// Show a quote of the day at the top of the Library.
+  bool get quoteOnLibrary => _quoteOnLibrary;
+
+  /// Whether the quote of the day was hidden today.
+  bool quoteHiddenToday(DateTime now) {
+    final hidden = _quoteHiddenOn;
+    return hidden != null &&
+        hidden.year == now.year &&
+        hidden.month == now.month &&
+        hidden.day == now.day;
+  }
+
+  /// The last day each quote was the quote of the day.
+  Map<String, DateTime> get quoteSeen => Map.unmodifiable(_quoteSeen);
+
+  /// Books on In progress you said to keep, and when.
+  Map<String, DateTime> get stalledSnoozed => Map.unmodifiable(_stalledSnoozed);
+
+  /// Show this year's reading goal at the top of the Library.
+  bool get goalOnLibrary => _goalOnLibrary;
+
   static Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final settings = AppSettings(prefs: prefs);
@@ -242,7 +283,109 @@ class AppSettings extends ChangeNotifier {
       final goal = prefs.getInt(key);
       if (year != null && goal != null) settings._pageGoals[year] = goal;
     }
+    settings._savedFilters = decodeSavedFilters(prefs.getString('savedFilters'));
+    settings._goalOnLibrary = prefs.getBool('goalOnLibrary') ?? true;
+    settings._smartRewind = prefs.getBool('smartRewind') ?? true;
+    settings._notDuplicates = {...?prefs.getStringList('notDuplicates')};
+    settings._quoteOnLibrary = prefs.getBool('quoteOnLibrary') ?? true;
+    settings._quoteHiddenOn = _fromMillis(prefs.getInt('quoteHiddenOn'));
+    settings._quoteSeen = decodeSeen(prefs.getString('quoteSeen'));
+    settings._stalledSnoozed = decodeSeen(prefs.getString('stalledSnoozed'));
     return settings;
+  }
+
+  void setSavedFilters(List<SavedFilter> filters) {
+    _savedFilters = [...filters];
+    prefs?.setString('savedFilters', encodeSavedFilters(_savedFilters));
+    notifyListeners();
+  }
+
+  void setSmartRewind(bool value) {
+    _smartRewind = value;
+    prefs?.setBool('smartRewind', value);
+    notifyListeners();
+  }
+
+  void setQuoteOnLibrary(bool value) {
+    _quoteOnLibrary = value;
+    prefs?.setBool('quoteOnLibrary', value);
+    notifyListeners();
+  }
+
+  void hideQuoteToday(DateTime now) {
+    _quoteHiddenOn = now;
+    prefs?.setInt('quoteHiddenOn', now.millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  /// Records that a quote was shown today. Does not tell listeners, as it
+  /// happens while the Library is being drawn.
+  void markQuoteSeen(String key, DateTime now) {
+    final last = _quoteSeen[key];
+    if (last != null &&
+        last.year == now.year &&
+        last.month == now.month &&
+        last.day == now.day) {
+      return;
+    }
+    _quoteSeen[key] = now;
+    prefs?.setString('quoteSeen', encodeSeen(_quoteSeen));
+  }
+
+  void snoozeStalled(String bookId, DateTime now) {
+    _stalledSnoozed[bookId] = now;
+    prefs?.setString('stalledSnoozed', encodeSeen(_stalledSnoozed));
+    notifyListeners();
+  }
+
+  void addNotDuplicate(String pairKey) {
+    if (!_notDuplicates.add(pairKey)) return;
+    prefs?.setStringList('notDuplicates', _notDuplicates.toList());
+    notifyListeners();
+  }
+
+  void setGoalOnLibrary(bool value) {
+    _goalOnLibrary = value;
+    prefs?.setBool('goalOnLibrary', value);
+    notifyListeners();
+  }
+
+  /// After a tag is renamed on the books: tag goals and saved filters use
+  /// the new name too. A null [to] means the tag was deleted.
+  void renameTagEverywhere(String from, String? to) {
+    final clean = to?.trim();
+    for (final year in [..._tagGoals.keys]) {
+      final goals = {..._tagGoals[year]!};
+      final goal = goals.remove(from);
+      if (goal == null) continue;
+      if (clean != null && clean.isNotEmpty) {
+        goals[clean] = (goals[clean] ?? 0) > goal ? goals[clean]! : goal;
+      }
+      if (goals.isEmpty) {
+        _tagGoals.remove(year);
+      } else {
+        _tagGoals[year] = goals;
+      }
+    }
+    prefs?.setString(
+      'tagGoals',
+      jsonEncode({
+        for (final entry in _tagGoals.entries) '${entry.key}': entry.value,
+      }),
+    );
+    Set<String> swap(Set<String> tags) => {
+          for (final tag in tags)
+            if (tag != from) tag else if (clean != null && clean.isNotEmpty) clean,
+        };
+    _savedFilters = [
+      for (final filter in _savedFilters)
+        filter.copyWith(
+          tags: swap(filter.tags),
+          excludedTags: swap(filter.excludedTags),
+        ),
+    ];
+    prefs?.setString('savedFilters', encodeSavedFilters(_savedFilters));
+    notifyListeners();
   }
 
   void setAutoBackup(bool value) {

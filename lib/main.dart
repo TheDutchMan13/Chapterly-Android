@@ -37,7 +37,7 @@ Future<void> main() async {
   );
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
-  await _setUpListening(repository);
+  await _setUpListening(repository, settings);
   await _setUpReading();
   runApp(
     ChapterlyApp(
@@ -114,7 +114,10 @@ Future<void> _setUpReading() async {
 /// The audiobook player: which audio belongs to which book on this phone,
 /// the player, and the notification that keeps it playing with the screen
 /// off. If any of it fails, the app still opens without audio.
-Future<void> _setUpListening(BookRepository repository) async {
+Future<void> _setUpListening(
+  BookRepository repository,
+  AppSettings settings,
+) async {
   try {
     final dir = await getApplicationSupportDirectory();
     final library =
@@ -125,6 +128,8 @@ Future<void> _setUpListening(BookRepository repository) async {
       library: library,
       files: files,
     );
+    controller.smartRewind = settings.smartRewind;
+    settings.addListener(() => controller.smartRewind = settings.smartRewind);
     Listening.controller = controller;
     Listening.files = files;
     final session = await AudioSession.instance;
