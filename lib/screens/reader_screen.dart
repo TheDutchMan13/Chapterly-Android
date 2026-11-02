@@ -717,6 +717,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     final start = _pendingStart;
     if (start == null) return;
     _pendingStart = null;
+    // Pages skipped by jumping to the audiobook's place were not read here.
+    if (start > _mark) _mark = start;
     _goToProgress(start);
   }
 
