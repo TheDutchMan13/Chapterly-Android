@@ -8,6 +8,7 @@ import '../models/shelf.dart';
 import 'pin_lock.dart';
 import 'quote_of_day.dart';
 import 'saved_filters.dart';
+import 'wish_list.dart';
 
 enum SortField {
   dateAdded,
@@ -83,6 +84,7 @@ class AppSettings extends ChangeNotifier {
   final Map<int, int> _pageGoals = {};
   final Map<int, Map<String, int>> _tagGoals = {};
   List<SavedFilter> _savedFilters = [];
+  List<Wish> _wishes = [];
   bool _goalOnLibrary = true;
   bool _smartRewind = true;
   Set<String> _notDuplicates = {};
@@ -193,6 +195,9 @@ class AppSettings extends ChangeNotifier {
   /// filter chips.
   List<SavedFilter> get savedFilters => List.unmodifiable(_savedFilters);
 
+  /// Books you want but do not have yet. Not in the library until moved.
+  List<Wish> get wishes => List.unmodifiable(_wishes);
+
   /// Go back a few seconds when playing an audiobook again after a pause.
   bool get smartRewind => _smartRewind;
 
@@ -285,6 +290,7 @@ class AppSettings extends ChangeNotifier {
       if (year != null && goal != null) settings._pageGoals[year] = goal;
     }
     settings._savedFilters = decodeSavedFilters(prefs.getString('savedFilters'));
+    settings._wishes = decodeWishes(prefs.getString('wishes'));
     settings._goalOnLibrary = prefs.getBool('goalOnLibrary') ?? true;
     settings._smartRewind = prefs.getBool('smartRewind') ?? true;
     settings._notDuplicates = {...?prefs.getStringList('notDuplicates')};
@@ -294,6 +300,12 @@ class AppSettings extends ChangeNotifier {
     settings._stalledSnoozed = decodeSeen(prefs.getString('stalledSnoozed'));
     settings._listenPausedAt = decodeSeen(prefs.getString('listenPausedAt'));
     return settings;
+  }
+
+  void setWishes(List<Wish> wishes) {
+    _wishes = [...wishes];
+    prefs?.setString('wishes', encodeWishes(_wishes));
+    notifyListeners();
   }
 
   void setSavedFilters(List<SavedFilter> filters) {

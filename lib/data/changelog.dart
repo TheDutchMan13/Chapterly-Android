@@ -13,6 +13,15 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.16.0',
+    date: '2026-11-02',
+    changes: [
+      'Wish list (More): books you want but do not have yet, with a '
+          'priority and where to get each one. Search it, and move a book '
+          'into your library (For later) when you get it',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.15.0',
     date: '2026-11-01',
     changes: [

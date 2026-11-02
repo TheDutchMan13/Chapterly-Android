@@ -16,6 +16,7 @@ import 'series_screen.dart';
 import 'settings_screen.dart';
 import 'tags_screen.dart';
 import 'trash_screen.dart';
+import 'wish_list_screen.dart';
 import 'whats_new_screen.dart';
 
 /// "5 min ago" and the like.
@@ -148,6 +149,15 @@ class MoreScreen extends StatelessWidget {
             onTap: () => _push(
               context,
               TagsScreen(repository: repository, settings: settings),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.favorite_outline),
+            title: const Text('Wish list'),
+            subtitle: const Text('Books you want but do not have yet'),
+            onTap: () => _push(
+              context,
+              WishListScreen(repository: repository, settings: settings),
             ),
           ),
           ListTile(
