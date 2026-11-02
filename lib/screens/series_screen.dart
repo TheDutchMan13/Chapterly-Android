@@ -9,7 +9,7 @@ import '../models/shelf.dart';
 // The same screen is in the Windows app.
 
 /// Your series: which books you have, which you have finished, which numbers
-/// are missing (add them to For later with one click), and what to read next.
+/// are missing (add them to For later with one tap), and what to read next.
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({
     super.key,
@@ -97,20 +97,19 @@ class _SeriesScreenState extends State<SeriesScreen> {
       appBar: AppBar(
         title: const Text('Series'),
         actions: [
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Find series in titles',
             onPressed: _findInTitles,
             icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Find series in titles'),
           ),
-          const SizedBox(width: 8),
-          Row(
-            children: [
-              const Text('Hide finished series'),
-              Switch(
-                value: _hideComplete,
-                onChanged: (value) => setState(() => _hideComplete = value),
+          PopupMenuButton<void>(
+            tooltip: 'More',
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                checked: _hideComplete,
+                onTap: () => setState(() => _hideComplete = !_hideComplete),
+                child: const Text('Hide finished series'),
               ),
-              const SizedBox(width: 12),
             ],
           ),
         ],
@@ -173,7 +172,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
                           for (final number in series.missing)
                             Tooltip(
                               message: 'You do not have #$number. '
-                                  'Click to add it to For later.',
+                                  'Tap to add it to For later.',
                               child: ActionChip(
                                 avatar: const Icon(Icons.add, size: 18),
                                 label: Text('#$number'),

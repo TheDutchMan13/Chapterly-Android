@@ -770,7 +770,12 @@ class BookDetailScreen extends StatelessWidget {
                         label: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(book.shelf.label),
+                            Flexible(
+                              child: Text(
+                                book.shelf.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const Icon(Icons.arrow_drop_down, size: 18),
                           ],
                         ),

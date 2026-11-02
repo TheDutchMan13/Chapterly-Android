@@ -13,6 +13,53 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.14.0',
+    date: '2026-11-01',
+    changes: [
+      'Search forgives typos ("Brandn Sanderson"), finds words in any order '
+          'and names without accents ("Bronte")',
+      "This year's reading goal at the top of the Library, with where you "
+          'are heading by Dec 31 (hide it with the x, or in Settings)',
+      'Finish forecast: a book you are reading shows when you should finish '
+          'it at your recent pace (recent days count more)',
+      'What should I read next? picks the best match for your taste and '
+          'says why; the next book of a series you are reading comes first. '
+          'Surprise me still picks at random',
+      'Time I have (What should I read next?): only books you could read in '
+          '1, 3, 6 or 12 hours',
+      'Predicted rating and reading time on the Reading tab of a book',
+      'Possible duplicates: Find duplicates also finds books that are nearly '
+          'the same (a typo, a subtitle, "Deluxe Edition"), to merge or mark '
+          'as not the same',
+      'Better matching of book and audiobook files to your books',
+      'Rewind a little after a pause (Settings, on by default): playing an '
+          'audiobook again goes back 2 to 30 seconds',
+      'Series (More): every series with what you have, what you finished, '
+          'the missing numbers and what to read next; it can also find series '
+          'in titles such as "The Final Empire (Mistborn, #1)"',
+      'Tags (More): rename, merge or delete a tag on all books',
+      'Saved filters: save the filter chips and search under a name (Saved '
+          'filters, at the start of the chips)',
+      'Stalled books: a note on the Library when a book on In progress has '
+          'not moved for much longer than usual',
+      'Quote of the day on the Library (turn it off in Settings)',
+      'Library health (More): invalid ISBNs (and ISBN-10s to change to '
+          'ISBN-13 in one tap), missing dates, pages, authors and covers, '
+          'duplicates and stalled books',
+      'Search notes and quotes (More): your notes, quotes, highlights and '
+          'notes on highlights, best match first',
+      'Share a book\'s notes, quotes and highlights as a Markdown file (the '
+          'share button on the Notes tab)',
+      'Your taste (Statistics): what you rate higher or lower than usual',
+      'Suggested tags (Suggest, next to Tags on a book page)',
+      'Similar books in your library, on a book page',
+      'Refresh details from Open Library for the books you select: blank '
+          'ISBNs, years, covers and pages are filled in',
+      'A book with both an audiobook and a book file shows where you are in '
+          'each, and carries on in one from where you are in the other',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.13.0',
     date: '2026-10-31',
     changes: [

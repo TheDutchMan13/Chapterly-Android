@@ -507,55 +507,51 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (quote == null) return null;
     if (_quoteSkip == 0) widget.settings.markQuoteSeen(quote.key, now);
     final textTheme = Theme.of(context).textTheme;
+    // Kept to two lines so the books still have most of a phone's screen.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Icon(Icons.format_quote, size: 20),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.format_quote, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: InkWell(
+              onTap: () => _openBook(quote.book),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    quote.text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontStyle: FontStyle.italic),
+                  ),
+                  Text(
+                    '${quote.book.title}'
+                    '${quote.book.author.isEmpty ? '' : ', ${quote.book.author}'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      quote.text,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyMedium
-                          ?.copyWith(fontStyle: FontStyle.italic),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                      onPressed: () => _openBook(quote.book),
-                      child: Text(
-                        '${quote.book.title}'
-                        '${quote.book.author.isEmpty ? '' : ', ${quote.book.author}'}',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (quotes.length > 1)
-                IconButton(
-                  tooltip: 'Another quote',
-                  icon: const Icon(Icons.refresh, size: 18),
-                  onPressed: () => setState(() => _quoteSkip++),
-                ),
-              IconButton(
-                tooltip: 'Hide for today (turn it off in Settings)',
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () => widget.settings.hideQuoteToday(now),
-              ),
-            ],
+            ),
           ),
-        ),
+          if (quotes.length > 1)
+            IconButton(
+              tooltip: 'Another quote',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.refresh, size: 18),
+              onPressed: () => setState(() => _quoteSkip++),
+            ),
+          IconButton(
+            tooltip: 'Hide for today (turn it off in Settings)',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => widget.settings.hideQuoteToday(now),
+          ),
+        ],
       ),
     );
   }
@@ -569,26 +565,36 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     if (stalled.isEmpty) return null;
     final count = stalled.length;
-    return MaterialBanner(
-      leading: const Icon(Icons.hourglass_bottom),
-      content: Text(
-        count == 1
-            ? '"${stalled.first.book.title}" has not moved in '
-                '${stalled.first.idleDays} days.'
-            : '$count books on In progress have not moved in a while.',
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.hourglass_bottom, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '"${stalled.first.book.title}" has not moved in '
+                      '${stalled.first.idleDays} days.'
+                  : '$count books on In progress have not moved in a while.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodyMedium,
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final now = DateTime.now();
+              for (final s in stalled) {
+                widget.settings.snoozeStalled(s.book.id, now);
+              }
+            },
+            child: const Text('Keep'),
+          ),
+          TextButton(onPressed: _openHealth, child: const Text('Review')),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            final now = DateTime.now();
-            for (final s in stalled) {
-              widget.settings.snoozeStalled(s.book.id, now);
-            }
-          },
-          child: const Text('Keep reading'),
-        ),
-        TextButton(onPressed: _openHealth, child: const Text('Review')),
-      ],
     );
   }
 
@@ -776,33 +782,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ],
     );
     final textTheme = Theme.of(context).textTheme;
-    final details = [
-      status.describe(),
-      ?outlook?.describe(),
-    ].join(' · ');
+    // The outlook to Dec 31 is in Statistics; here it is one line and a bar.
+    final details = outlook?.describe() ?? status.describe();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
       child: Row(
         children: [
           const Icon(Icons.flag_outlined, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$year goal: ${status.finished} of $goal',
-                  style: textTheme.titleSmall,
+                  '$year goal: ${status.finished} of $goal · $details',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall,
                 ),
                 const SizedBox(height: 4),
                 LinearProgressIndicator(value: status.progress),
-                const SizedBox(height: 4),
-                Text(details, style: textTheme.bodySmall),
               ],
             ),
           ),
           IconButton(
             tooltip: 'Hide (turn it back on in Settings)',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.close, size: 18),
             onPressed: () => widget.settings.setGoalOnLibrary(false),
           ),
@@ -1225,8 +1230,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         ],
                       ),
                     ?_goalStrip(),
-                    ?_stalledBanner(),
-                    ?_quoteCard(),
+                    // One note at a time, so the books keep the screen.
+                    ?(_stalledBanner() ?? _quoteCard()),
                     _FilterBar(
                       chips: [
                         _savedFiltersChip(),
