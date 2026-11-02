@@ -65,8 +65,14 @@ class PhoneSync extends ChangeNotifier {
       );
       final changed = _countChanges(local.books, merged.books);
       await repository.applySynced(merged.books, merged.tombstones);
+      // The wish list: the newer copy of each wish wins.
+      settings.mergeWishesFrom(remote.wishes);
       settings.recordSync(at: DateTime.now(), changed: changed);
-      return encodeSyncPayload(merged.books, merged.tombstones);
+      return encodeSyncPayload(
+        merged.books,
+        merged.tombstones,
+        wishes: settings.allWishes,
+      );
     } on FormatException catch (error) {
       settings.recordSyncError(error.message);
       rethrow;
