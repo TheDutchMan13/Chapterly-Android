@@ -42,7 +42,9 @@ class SqliteBookStore implements BookStore {
       priority TEXT,
       buy_at TEXT,
       queue_position INTEGER,
-      audio TEXT
+      audio TEXT,
+      audio_bookmarks TEXT,
+      extras TEXT
     )
   ''';
 
@@ -57,7 +59,7 @@ class SqliteBookStore implements BookStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'chapterly.db'),
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute(_createBooksTable);
         await db.execute(_createTombstonesTable);
@@ -125,6 +127,14 @@ class SqliteBookStore implements BookStore {
         // Version 9 added where you are in the audiobook.
         if (oldVersion < 9) {
           await db.execute('ALTER TABLE books ADD COLUMN audio TEXT');
+        }
+        // Version 10 added audiobook bookmarks (synced with the PC) and
+        // book fields from a newer Chapterly that this app does not know.
+        if (oldVersion < 10) {
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN audio_bookmarks TEXT',
+          );
+          await db.execute('ALTER TABLE books ADD COLUMN extras TEXT');
         }
       },
     );

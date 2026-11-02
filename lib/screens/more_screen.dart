@@ -4,11 +4,17 @@ import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/file_io.dart';
 import '../data/phone_sync.dart';
+import '../models/book.dart';
+import 'book_detail_screen.dart';
 import 'duplicates_screen.dart';
+import 'library_health_screen.dart';
 import 'manage_shelves_screen.dart';
 import 'next_up_screen.dart';
+import 'notes_search_screen.dart';
 import 'read_next_screen.dart';
+import 'series_screen.dart';
 import 'settings_screen.dart';
+import 'tags_screen.dart';
 import 'trash_screen.dart';
 import 'whats_new_screen.dart';
 
@@ -44,6 +50,16 @@ class MoreScreen extends StatelessWidget {
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
+
+  void _openBook(BuildContext context, Book book) => _push(
+        context,
+        BookDetailScreen(
+          repository: repository,
+          settings: settings,
+          fileIo: fileIo,
+          bookId: book.id,
+        ),
+      );
 
   void _openSettings(BuildContext context) => _push(
         context,
@@ -114,10 +130,58 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.library_books_outlined),
+            title: const Text('Series'),
+            subtitle: const Text('What you have, what is missing, what is next'),
+            onTap: () => _push(
+              context,
+              SeriesScreen(
+                repository: repository,
+                onOpenBook: (book) => _openBook(context, book),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sell_outlined),
+            title: const Text('Tags'),
+            subtitle: const Text('Rename, merge or delete tags'),
+            onTap: () => _push(
+              context,
+              TagsScreen(repository: repository, settings: settings),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_search),
+            title: const Text('Search notes and quotes'),
+            onTap: () => _push(
+              context,
+              NotesSearchScreen(
+                repository: repository,
+                onOpenBook: (book) => _openBook(context, book),
+              ),
+            ),
+          ),
+          heading('Tidy up'),
+          ListTile(
+            leading: const Icon(Icons.health_and_safety_outlined),
+            title: const Text('Library health'),
+            subtitle: const Text('ISBNs, missing details, stalled books'),
+            onTap: () => _push(
+              context,
+              LibraryHealthScreen(
+                repository: repository,
+                settings: settings,
+                onOpenBook: (book) => _openBook(context, book),
+              ),
+            ),
+          ),
+          ListTile(
             leading: const Icon(Icons.content_copy_outlined),
             title: const Text('Find duplicates'),
-            onTap: () =>
-                _push(context, DuplicatesScreen(repository: repository)),
+            onTap: () => _push(
+              context,
+              DuplicatesScreen(repository: repository, settings: settings),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.delete_outline),

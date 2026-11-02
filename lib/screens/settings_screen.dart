@@ -501,6 +501,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, _) => Column(
               children: [
                 SwitchListTile(
+                  title: const Text("Show this year's goal on the Library"),
+                  subtitle: const Text(
+                    'A progress bar above the filters, when you have set a '
+                    'reading goal in Statistics',
+                  ),
+                  value: widget.settings.goalOnLibrary,
+                  onChanged: widget.settings.setGoalOnLibrary,
+                ),
+                SwitchListTile(
+                  title: const Text('Quote of the day on the Library'),
+                  subtitle: const Text(
+                    'One of your quotes or highlights each day, the one you '
+                    'have not seen for longest first',
+                  ),
+                  value: widget.settings.quoteOnLibrary,
+                  onChanged: widget.settings.setQuoteOnLibrary,
+                ),
+                SwitchListTile(
+                  title: const Text('Rewind a little after a pause'),
+                  subtitle: const Text(
+                    'When you play an audiobook again, go back a few seconds: '
+                    '2 after a short pause, up to 30 after a day.',
+                  ),
+                  value: widget.settings.smartRewind,
+                  onChanged: widget.settings.setSmartRewind,
+                ),
+                SwitchListTile(
                   title: const Text('Show ratings as numbers'),
                   subtitle: const Text('4/5 instead of stars'),
                   value: widget.settings.ratingAsNumber,

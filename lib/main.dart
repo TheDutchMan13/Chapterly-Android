@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'audio/android_audio_files.dart';
+import 'audio/audio_bookmarks.dart';
 import 'audio/audio_library.dart';
 import 'audio/background_audio.dart';
 import 'audio/listen_controller.dart';
@@ -37,7 +38,9 @@ Future<void> main() async {
   );
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
-  await _setUpListening(repository);
+  // Audiobook bookmarks live with the books, so they sync with the PC.
+  AudioBookmarking.repository = repository;
+  await _setUpListening(repository, settings);
   await _setUpReading();
   runApp(
     ChapterlyApp(
@@ -114,7 +117,10 @@ Future<void> _setUpReading() async {
 /// The audiobook player: which audio belongs to which book on this phone,
 /// the player, and the notification that keeps it playing with the screen
 /// off. If any of it fails, the app still opens without audio.
-Future<void> _setUpListening(BookRepository repository) async {
+Future<void> _setUpListening(
+  BookRepository repository,
+  AppSettings settings,
+) async {
   try {
     final dir = await getApplicationSupportDirectory();
     final library =
@@ -125,6 +131,10 @@ Future<void> _setUpListening(BookRepository repository) async {
       library: library,
       files: files,
     );
+    controller.smartRewind = settings.smartRewind;
+    controller.pausedAtFor = settings.listenPausedAt;
+    controller.onPaused = settings.recordListenPause;
+    settings.addListener(() => controller.smartRewind = settings.smartRewind);
     Listening.controller = controller;
     Listening.files = files;
     final session = await AudioSession.instance;

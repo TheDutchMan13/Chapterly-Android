@@ -17,7 +17,8 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   .mp3, or a folder of files) and listen in Chapterly. Chapters, 30-second
   skips, speed 0.5x to 3x, sleep timer, playing with the screen off
   (notification, lock screen, headphone buttons). Listening time goes into
-  the reading log, and where you are syncs with the PC. The files are read
+  the reading log. Bookmarks with notes. Where you are and your bookmarks
+  sync with the PC. The files are read
   through Android's file picker, so no storage permission is needed.
 - Reader: add a book's EPUB or PDF file and read it in Chapterly. Tap the
   middle of the page for the tools: chapters, search, bookmarks, text size,
@@ -101,9 +102,19 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
 - Reading challenge: the yearly goal is a ring with books to go and whether
   you are ahead of or behind pace
 - Year in review: a shareable picture of your year (Statistics > pick a year)
-- What should I read next?: a random pick from For later, optionally by tag
-  or format
-- Find duplicates: books that look the same are merged into one (with Undo)
+- What should I read next?: the best match for your taste (with the reason),
+  or a random pick, optionally by tag, format or the time you have
+- Smarter search: typos are forgiven, words can be in any order, accents
+  don't matter
+- On a book page: when you should finish at your recent pace, how long it
+  takes at your speed, the rating you would probably give it, suggested tags,
+  similar books in your library, and sharing your notes as Markdown
+- Series, Tags, Library health and Search notes and quotes (in More)
+- Saved filters, a quote of the day, a note about stalled books and your
+  yearly goal on the Library
+- Your taste in Statistics: what you rate higher or lower than usual
+- Find duplicates: books that look the same, or nearly the same, are merged
+  into one (with Undo)
 - More by this author: other books by the author from Open Library, leaving
   out the ones you have
 - App lock: protect Chapterly with a PIN (Settings > Privacy). A forgotten PIN

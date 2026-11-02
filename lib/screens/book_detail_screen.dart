@@ -2,14 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../audio/audio_library.dart';
+import '../audio/listening.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/collections.dart';
 import '../data/date_format.dart';
 import '../data/file_io.dart';
+import '../data/notes_export.dart';
 import '../data/open_library_client.dart';
 import '../data/rating_text.dart';
 import '../data/statistics.dart';
+import '../ebook/ebook_reading.dart';
+import '../models/audio_bookmark.dart';
+import '../models/audio_progress.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/rating_aspect.dart';
@@ -21,6 +27,7 @@ import '../widgets/shelf_icon.dart';
 import 'author_books_screen.dart';
 import 'book_card_screen.dart';
 import 'book_file_card.dart';
+import 'book_insights.dart';
 import 'listen_card.dart';
 import 'log_entry_dialog.dart';
 import 'next_up_screen.dart';
@@ -246,6 +253,55 @@ class BookDetailScreen extends StatelessWidget {
           if (book.aspectRatings[aspect.name] case final value?)
             '${aspect.label} $value',
       ].join(' · ');
+
+  /// Shares your notes, quotes, the reader's highlights and audiobook
+  /// bookmarks for [book] as a Markdown file (for Obsidian, a notes app,
+  /// email...).
+  Future<void> _exportNotes(BuildContext context, Book book) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final audioLink = Listening.controller?.library.linkFor(book.id);
+    String place(AudioBookmark mark) {
+      final clock = formatPlayerClock(Duration(milliseconds: mark.positionMs));
+      final chapters = audioLink?.allChapters ?? const <AudioChapter>[];
+      final index = audioLink?.chapterAt(mark.track, mark.trackMs);
+      return index == null || index >= chapters.length
+          ? clock
+          : '$clock · ${chapters[index].title}';
+    }
+
+    final data = BookNotesExport(
+      title: book.title,
+      author: book.author,
+      notes: book.notes,
+      quotes: book.quotes,
+      highlights:
+          EbookReading.library?.linkFor(book.id)?.highlights ?? const [],
+      marks: [
+        for (final mark in sortedBookmarks(book.audioBookmarks))
+          ExportedMark(place: place(mark), note: mark.note),
+      ],
+    );
+    if (data.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+          'There are no notes, quotes, highlights or bookmarks to share yet.',
+        ),
+      ));
+      return;
+    }
+    try {
+      await fileIo.shareText(
+        fileName: '${data.fileStem}.md',
+        content: notesMarkdown(data),
+        mimeType: 'text/markdown',
+        subject: '${book.title} - notes',
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('The notes could not be shared.')),
+      );
+    }
+  }
 
   Future<void> _editNotes(BuildContext context, Book book) async {
     final text = await _askText(
@@ -735,7 +791,12 @@ class BookDetailScreen extends StatelessWidget {
                         label: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(book.shelf.label),
+                            Flexible(
+                              child: Text(
+                                book.shelf.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const Icon(Icons.arrow_drop_down, size: 18),
                           ],
                         ),
@@ -977,6 +1038,15 @@ class BookDetailScreen extends StatelessWidget {
                             Text('Tags', style: textTheme.titleMedium),
                             const Spacer(),
                             TextButton.icon(
+                              onPressed: () => showTagSuggestions(
+                                context,
+                                repository: repository,
+                                book: book,
+                              ),
+                              icon: const Icon(Icons.auto_awesome_outlined),
+                              label: const Text('Suggest'),
+                            ),
+                            TextButton.icon(
                               onPressed: () => _editTags(context, book),
                               icon: const Icon(Icons.edit),
                               label: const Text('Edit'),
@@ -1061,6 +1131,21 @@ class BookDetailScreen extends StatelessWidget {
                             label: const Text('Books like this online'),
                           ),
                         ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                            onPressed: () => showSimilarInLibrary(
+                              context,
+                              repository: repository,
+                              settings: settings,
+                              fileIo: fileIo,
+                              book: book,
+                            ),
+                            icon: const Icon(Icons.hub_outlined),
+                            label: const Text('Similar books in your library'),
+                          ),
+                        ),
                         if (book.firstPublishYear != null)
                           Text('First published ${book.firstPublishYear}'),
                         if (book.isbn != null) Text('ISBN ${book.isbn}'),
@@ -1068,6 +1153,9 @@ class BookDetailScreen extends StatelessWidget {
                       _section([
                         BookFileCard(book: book, repository: repository),
                         ListenCard(book: book, repository: repository),
+                        FormatSyncCard(book: book, repository: repository),
+                        PredictedRatingTile(book: book, repository: repository),
+                        ReadingTimeTile(book: book, repository: repository),
                         const SizedBox(height: 8),
                         _dateTile(context, book, start: true),
                         _dateTile(context, book, start: false),
@@ -1101,6 +1189,8 @@ class BookDetailScreen extends StatelessWidget {
                             ),
                             onTap: () => _editCurrentPage(context, book),
                           ),
+                        if (book.shelf == Shelf.inProgress)
+                          FinishForecastTile(book: book),
                         if (book.shelf == Shelf.finished)
                           Align(
                             alignment: Alignment.centerLeft,
@@ -1170,6 +1260,12 @@ class BookDetailScreen extends StatelessWidget {
                           children: [
                             Text('Notes', style: textTheme.titleMedium),
                             const Spacer(),
+                            IconButton(
+                              tooltip: 'Share notes, quotes and highlights '
+                                  'as Markdown',
+                              onPressed: () => _exportNotes(context, book),
+                              icon: const Icon(Icons.ios_share),
+                            ),
                             TextButton.icon(
                               onPressed: () => _editNotes(context, book),
                               icon: const Icon(Icons.edit),

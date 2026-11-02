@@ -23,6 +23,7 @@ void openReader(
   required BookRepository repository,
   required EbookLibrary library,
   required String bookId,
+  double? startAt,
 }) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -30,6 +31,7 @@ void openReader(
         repository: repository,
         library: library,
         bookId: bookId,
+        startAt: startAt,
       ),
     ),
   );
@@ -46,12 +48,17 @@ class ReaderScreen extends StatefulWidget {
     required this.library,
     required this.bookId,
     this.now = DateTime.now,
+    this.startAt,
   });
 
   final BookRepository repository;
   final EbookLibrary library;
   final String bookId;
   final DateTime Function() now;
+
+  /// Open at this far through the book (0 to 1) instead of the saved place,
+  /// for carrying on from where you are in the audiobook.
+  final double? startAt;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -77,6 +84,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   EpubTextSelection? _selection;
   String? _problem;
   String? _initialLocations;
+
+  /// [ReaderScreen.startAt], until the book is ready to move there.
+  late double? _pendingStart = widget.startAt;
 
   /// Where a touch started, to tell a tap from a swipe.
   Offset? _touchStart;
@@ -551,6 +561,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       _pdfDocument = document;
     });
     widget.library.setPageCount(widget.bookId, pages);
+    _startAtPending();
     // A PDF's pages are the book's pages when it has none written down.
     final book = _book;
     if (book != null && book.pages == null && pages > 0) {
@@ -696,6 +707,15 @@ class _ReaderScreenState extends State<ReaderScreen>
     } else {
       _epub.display(cfi: locator);
     }
+  }
+
+  void _startAtPending() {
+    final start = _pendingStart;
+    if (start == null) return;
+    _pendingStart = null;
+    // Pages skipped by jumping to the audiobook's place were not read here.
+    if (start > _mark) _mark = start;
+    _goToProgress(start);
   }
 
   void _goToProgress(double value) {
@@ -898,6 +918,9 @@ class _ReaderScreenState extends State<ReaderScreen>
           theme: _epubTheme(prefs),
         ),
         onEpubLoaded: _epubLoaded,
+        // Moving by percentage needs the book's locations, loaded from the
+        // saved file or worked out; this is called once they are ready.
+        onLocationLoaded: _startAtPending,
         onChaptersLoaded: (chapters) => setState(() => _chapters = chapters),
         onRelocated: _epubRelocated,
         onLocationsGenerated: _saveLocations,
