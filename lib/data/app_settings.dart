@@ -8,6 +8,7 @@ import '../models/shelf.dart';
 import 'pin_lock.dart';
 import 'quote_of_day.dart';
 import 'saved_filters.dart';
+import 'wish_list.dart';
 
 enum SortField {
   dateAdded,
@@ -83,6 +84,7 @@ class AppSettings extends ChangeNotifier {
   final Map<int, int> _pageGoals = {};
   final Map<int, Map<String, int>> _tagGoals = {};
   List<SavedFilter> _savedFilters = [];
+  List<Wish> _wishes = [];
   bool _goalOnLibrary = true;
   bool _smartRewind = true;
   Set<String> _notDuplicates = {};
@@ -193,6 +195,12 @@ class AppSettings extends ChangeNotifier {
   /// filter chips.
   List<SavedFilter> get savedFilters => List.unmodifiable(_savedFilters);
 
+  /// Books you want but do not have yet. Not in the library until moved.
+  List<Wish> get wishes => List.unmodifiable(activeWishes(_wishes));
+
+  /// Every wish including deleted ones, which sync needs.
+  List<Wish> get allWishes => List.unmodifiable(_wishes);
+
   /// Go back a few seconds when playing an audiobook again after a pause.
   bool get smartRewind => _smartRewind;
 
@@ -285,6 +293,7 @@ class AppSettings extends ChangeNotifier {
       if (year != null && goal != null) settings._pageGoals[year] = goal;
     }
     settings._savedFilters = decodeSavedFilters(prefs.getString('savedFilters'));
+    settings._wishes = decodeWishes(prefs.getString('wishes'));
     settings._goalOnLibrary = prefs.getBool('goalOnLibrary') ?? true;
     settings._smartRewind = prefs.getBool('smartRewind') ?? true;
     settings._notDuplicates = {...?prefs.getStringList('notDuplicates')};
@@ -294,6 +303,41 @@ class AppSettings extends ChangeNotifier {
     settings._stalledSnoozed = decodeSeen(prefs.getString('stalledSnoozed'));
     settings._listenPausedAt = decodeSeen(prefs.getString('listenPausedAt'));
     return settings;
+  }
+
+  void _saveWishes() {
+    prefs?.setString('wishes', encodeWishes(_wishes));
+    notifyListeners();
+  }
+
+  /// Adds or changes a wish, stamping it as changed now.
+  void saveWish(Wish wish) {
+    final saved = wish.copyWith(updatedAt: DateTime.now());
+    _wishes = [
+      for (final w in _wishes)
+        if (w.id != saved.id) w,
+      saved,
+    ];
+    _saveWishes();
+  }
+
+  /// Deletes a wish. It is kept, marked deleted, so the delete syncs.
+  void deleteWish(String id) {
+    final now = DateTime.now();
+    _wishes = [
+      for (final w in _wishes)
+        if (w.id == id) w.copyWith(updatedAt: now, deletedAt: () => now) else w,
+    ];
+    _saveWishes();
+  }
+
+  /// Takes in the wishes from the other device (sync): the newer copy of each
+  /// wish wins. Saves only when something changed.
+  void mergeWishesFrom(List<Wish> incoming) {
+    if (incoming.isEmpty) return;
+    final before = encodeWishes(_wishes);
+    _wishes = mergeWishes(_wishes, incoming);
+    if (encodeWishes(_wishes) != before) _saveWishes();
   }
 
   void setSavedFilters(List<SavedFilter> filters) {
