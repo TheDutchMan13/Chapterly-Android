@@ -90,6 +90,7 @@ class AppSettings extends ChangeNotifier {
   DateTime? _quoteHiddenOn;
   Map<String, DateTime> _quoteSeen = {};
   Map<String, DateTime> _stalledSnoozed = {};
+  Map<String, DateTime> _listenPausedAt = {};
   bool _autoBackup = false;
   int _autoBackupDays = 7;
   DateTime? _lastAutoBackupAt;
@@ -291,6 +292,7 @@ class AppSettings extends ChangeNotifier {
     settings._quoteHiddenOn = _fromMillis(prefs.getInt('quoteHiddenOn'));
     settings._quoteSeen = decodeSeen(prefs.getString('quoteSeen'));
     settings._stalledSnoozed = decodeSeen(prefs.getString('stalledSnoozed'));
+    settings._listenPausedAt = decodeSeen(prefs.getString('listenPausedAt'));
     return settings;
   }
 
@@ -330,6 +332,22 @@ class AppSettings extends ChangeNotifier {
     }
     _quoteSeen[key] = now;
     prefs?.setString('quoteSeen', encodeSeen(_quoteSeen));
+  }
+
+  /// When an audiobook was last paused, for rewinding a little.
+  DateTime? listenPausedAt(String bookId) => _listenPausedAt[bookId];
+
+  /// Records a pause. Keeps the 20 most recent books. Does not tell
+  /// listeners: nothing on screen shows it.
+  void recordListenPause(String bookId, DateTime at) {
+    _listenPausedAt[bookId] = at;
+    if (_listenPausedAt.length > 20) {
+      final oldest = _listenPausedAt.entries
+          .reduce((a, b) => a.value.isBefore(b.value) ? a : b)
+          .key;
+      _listenPausedAt.remove(oldest);
+    }
+    prefs?.setString('listenPausedAt', encodeSeen(_listenPausedAt));
   }
 
   void snoozeStalled(String bookId, DateTime now) {

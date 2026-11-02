@@ -540,5 +540,49 @@ void main() {
       await controller.play();
       expect(engine.position, const Duration(minutes: 20));
     });
+
+    test('a pause from an earlier launch counts, edits to the book do not',
+        () async {
+      final repository = BookRepository(InMemoryBookStore());
+      await repository.load();
+      await repository.add(title: 'Dune', author: 'F', shelf: Shelf.inProgress);
+      final id = repository.books.single.id;
+      await repository.setAudioProgress(
+        id,
+        const AudioProgress(
+          positionMs: 10 * 60000,
+          trackMs: 10 * 60000,
+          trackCount: 2,
+        ),
+      );
+      // An edit just now must not look like a pause just now.
+      await repository.setRating(id, 4);
+      final library = AudioLibrary();
+      await library.setLink(id, _twoFiles);
+      final engine = FakeEngine(const [Duration(hours: 1), Duration(hours: 1)]);
+      final now = DateTime(2026, 10, 31, 20);
+      final paused = <String, DateTime>{id: now.subtract(const Duration(days: 1))};
+      final controller = ListenController(
+        repository: repository,
+        library: library,
+        files: FakeFiles({}),
+        engine: () => engine,
+        now: () => now,
+        saveEvery: const Duration(hours: 1),
+      )
+        ..smartRewind = true
+        ..pausedAtFor = ((bookId) => paused[bookId])
+        ..onPaused = ((bookId, at) => paused[bookId] = at);
+      addTearDown(controller.dispose);
+
+      await controller.open(id);
+      await pumpEventQueue();
+      await controller.play();
+      expect(engine.position, const Duration(minutes: 9, seconds: 30));
+      await pumpEventQueue();
+      await controller.pause();
+      await pumpEventQueue();
+      expect(paused[id], now);
+    });
   });
 }

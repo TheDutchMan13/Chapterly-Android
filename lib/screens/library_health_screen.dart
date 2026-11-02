@@ -98,25 +98,32 @@ class _LibraryHealthScreenState extends State<LibraryHealthScreen> {
             ListTile(
               dense: true,
               title: Text(s.book.title),
-              subtitle: Text(s.describe()),
               onTap: () => _open(s.book),
-              trailing: Wrap(
-                spacing: 4,
+              // The buttons go under the text so the title keeps the width
+              // of a phone.
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton(
-                    onPressed: () => widget.settings
-                        .snoozeStalled(s.book.id, DateTime.now()),
-                    child: const Text('Keep'),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        widget.repository.moveTo(s.book.id, Shelf.forLater),
-                    child: const Text('For later'),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        widget.repository.moveTo(s.book.id, Shelf.unfinished),
-                    child: const Text('Unfinished'),
+                  Text(s.describe()),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      TextButton(
+                        onPressed: () => widget.settings
+                            .snoozeStalled(s.book.id, DateTime.now()),
+                        child: const Text('Keep'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            widget.repository.moveTo(s.book.id, Shelf.forLater),
+                        child: const Text('For later'),
+                      ),
+                      TextButton(
+                        onPressed: () => widget.repository
+                            .moveTo(s.book.id, Shelf.unfinished),
+                        child: const Text('Unfinished'),
+                      ),
+                    ],
                   ),
                 ],
               ),

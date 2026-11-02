@@ -41,6 +41,12 @@ class ListenController extends ChangeNotifier {
   bool smartRewind = false;
   DateTime? _pausedAt;
 
+  /// When each book was last paused, kept between app launches (set from
+  /// the settings in main.dart). Not the book's updatedAt, which changes
+  /// with any edit or sync.
+  DateTime? Function(String bookId)? pausedAtFor;
+  void Function(String bookId, DateTime at)? onPaused;
+
   AudioEngine? _engine;
   StreamSubscription<void>? _changes;
   StreamSubscription<void>? _done;
@@ -157,7 +163,7 @@ class ListenController extends ChangeNotifier {
     _finished = false;
     _lastSaved = book.audio;
     // When it was last saved: the end of the last listen, roughly.
-    _pausedAt = book.audio == null ? null : book.updatedAt;
+    _pausedAt = book.audio == null ? null : pausedAtFor?.call(bookId);
     _lastLog = _now();
     _changes = engine.changes.listen((_) => _onChange());
     _done = engine.completed.listen((_) => _onCompleted());
@@ -354,6 +360,8 @@ class ListenController extends ChangeNotifier {
       _saveTimer = Timer.periodic(saveEvery, (_) => _tick());
     } else if (!nowPlaying && _wasPlaying) {
       _pausedAt = _now();
+      final id = _bookId;
+      if (id != null) onPaused?.call(id, _pausedAt!);
       _countListening();
       _saveTimer?.cancel();
       _saveTimer = null;

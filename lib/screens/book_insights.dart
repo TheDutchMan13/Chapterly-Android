@@ -183,6 +183,9 @@ class FormatSyncCard extends StatelessWidget {
           ebook: ebookLibrary.linkFor(book.id),
         );
         if (places == null || !places.apart) return const SizedBox.shrink();
+        // Listening from a place needs the length of the files on this
+        // device, known once the audiobook has been played here.
+        final canListen = audioLibrary.linkFor(book.id)?.lengthMs != null;
         final textTheme = Theme.of(context).textTheme;
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8),
@@ -216,7 +219,7 @@ class FormatSyncCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (places.audioAhead)
+                    if (places.audioAhead || !canListen)
                       FilledButton.tonalIcon(
                         onPressed: () => _readFrom(context, places.audio),
                         icon: const Icon(Icons.chrome_reader_mode_outlined),
@@ -228,14 +231,14 @@ class FormatSyncCard extends StatelessWidget {
                         icon: const Icon(Icons.headphones_outlined),
                         label: Text('Listen from ${_percent(places.reader)}'),
                       ),
-                    if (places.audioAhead)
+                    if (places.audioAhead && canListen)
                       TextButton(
                         onPressed: () => _listenFrom(context, places.reader),
                         child: Text(
                           'Or listen from ${_percent(places.reader)}',
                         ),
                       )
-                    else
+                    else if (canListen)
                       TextButton(
                         onPressed: () => _readFrom(context, places.audio),
                         child: Text('Or read from ${_percent(places.audio)}'),

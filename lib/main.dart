@@ -129,6 +129,8 @@ Future<void> _setUpListening(
       files: files,
     );
     controller.smartRewind = settings.smartRewind;
+    controller.pausedAtFor = settings.listenPausedAt;
+    controller.onPaused = settings.recordListenPause;
     settings.addListener(() => controller.smartRewind = settings.smartRewind);
     Listening.controller = controller;
     Listening.files = files;

@@ -384,9 +384,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   void _epubLoaded() {
     final link = _link;
     if (link == null) return;
-    // Moving by percentage needs the book's locations; when they are not
-    // saved yet this waits until they are worked out.
-    if (_initialLocations != null) _startAtPending();
     for (final highlight in link.highlights) {
       _epub.addHighlight(
         cfi: highlight.locator,
@@ -426,7 +423,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   void _saveLocations(String locations) {
     final link = _link;
     if (link == null) return;
-    _startAtPending();
     try {
       File('${link.path}.locations').writeAsStringSync(locations);
     } catch (_) {
@@ -922,6 +918,9 @@ class _ReaderScreenState extends State<ReaderScreen>
           theme: _epubTheme(prefs),
         ),
         onEpubLoaded: _epubLoaded,
+        // Moving by percentage needs the book's locations, loaded from the
+        // saved file or worked out; this is called once they are ready.
+        onLocationLoaded: _startAtPending,
         onChaptersLoaded: (chapters) => setState(() => _chapters = chapters),
         onRelocated: _epubRelocated,
         onLocationsGenerated: _saveLocations,

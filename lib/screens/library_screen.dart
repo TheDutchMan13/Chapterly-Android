@@ -416,37 +416,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Refreshing details'),
-        content: SizedBox(
-          width: 360,
-          child: ValueListenableBuilder<int>(
-            valueListenable: done,
-            builder: (context, count, _) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(value: count / books.length),
-                const SizedBox(height: 12),
-                Text('$count of ${books.length} books'),
-                const SizedBox(height: 4),
-                const Text(
-                  'Only blank details are filled in.',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
+      // Back closes the dialog too: that stops the refresh as well.
+      builder: (dialog) => PopScope(
+        onPopInvokedWithResult: (didPop, _) => stopped = true,
+        child: AlertDialog(
+          title: const Text('Refreshing details'),
+          content: SizedBox(
+            width: 360,
+            child: ValueListenableBuilder<int>(
+              valueListenable: done,
+              builder: (context, count, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: count / books.length),
+                  const SizedBox(height: 12),
+                  Text('$count of ${books.length} books'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Only blank details are filled in.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                stopped = true;
+                Navigator.pop(dialog);
+              },
+              child: const Text('Stop'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              stopped = true;
-              Navigator.pop(dialog);
-            },
-            child: const Text('Stop'),
-          ),
-        ],
       ),
     ).whenComplete(() => shown = false);
     final counts = {for (final outcome in RefreshOutcome.values) outcome: 0};
