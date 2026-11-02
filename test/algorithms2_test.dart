@@ -8,6 +8,7 @@ import 'package:chapterly/data/rating_predict.dart';
 import 'package:chapterly/data/reading_time.dart';
 import 'package:chapterly/data/stalled.dart';
 import 'package:chapterly/ebook/ebook_library.dart';
+import 'package:chapterly/models/audio_bookmark.dart';
 import 'package:chapterly/models/audio_progress.dart';
 import 'package:chapterly/models/book.dart';
 import 'package:chapterly/models/book_format.dart';
@@ -232,7 +233,13 @@ void main() {
         _quote('Nothing about the sea today.'),
       ]),
       _book('2', title: 'Other', notes: 'I loved the ending, the storm scene '
-          'was long and slow and the sea went on and on and on for pages.'),
+          'was long and slow and the sea went on and on and on for pages.')
+          .copyWith(audioBookmarks: [
+        AudioBookmark(
+          track: 0, trackMs: 0, positionMs: 0, addedAt: DateTime(2026),
+          note: 'Remember the lighthouse keeper',
+        ),
+      ]),
     ];
     final ebooks = {
       '1': EbookLink(
@@ -247,7 +254,7 @@ void main() {
       ),
     };
 
-    test('collects notes, quotes, highlights and highlight notes', () {
+    test('collects notes, quotes, highlights and bookmark notes', () {
       final docs = collectNotes(books, ebooks: ebooks);
       expect([for (final d in docs) d.source], containsAll(NoteSource.values));
     });

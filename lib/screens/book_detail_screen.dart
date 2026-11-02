@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../audio/audio_library.dart';
+import '../audio/listening.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/collections.dart';
@@ -12,6 +14,8 @@ import '../data/open_library_client.dart';
 import '../data/rating_text.dart';
 import '../data/statistics.dart';
 import '../ebook/ebook_reading.dart';
+import '../models/audio_bookmark.dart';
+import '../models/audio_progress.dart';
 import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/rating_aspect.dart';
@@ -250,10 +254,21 @@ class BookDetailScreen extends StatelessWidget {
             '${aspect.label} $value',
       ].join(' · ');
 
-  /// Shares your notes, quotes and the reader's highlights for [book] as a
-  /// Markdown file (for Obsidian, a notes app, email...).
+  /// Shares your notes, quotes, the reader's highlights and audiobook
+  /// bookmarks for [book] as a Markdown file (for Obsidian, a notes app,
+  /// email...).
   Future<void> _exportNotes(BuildContext context, Book book) async {
     final messenger = ScaffoldMessenger.of(context);
+    final audioLink = Listening.controller?.library.linkFor(book.id);
+    String place(AudioBookmark mark) {
+      final clock = formatPlayerClock(Duration(milliseconds: mark.positionMs));
+      final chapters = audioLink?.allChapters ?? const <AudioChapter>[];
+      final index = audioLink?.chapterAt(mark.track, mark.trackMs);
+      return index == null || index >= chapters.length
+          ? clock
+          : '$clock · ${chapters[index].title}';
+    }
+
     final data = BookNotesExport(
       title: book.title,
       author: book.author,
@@ -261,10 +276,16 @@ class BookDetailScreen extends StatelessWidget {
       quotes: book.quotes,
       highlights:
           EbookReading.library?.linkFor(book.id)?.highlights ?? const [],
+      marks: [
+        for (final mark in sortedBookmarks(book.audioBookmarks))
+          ExportedMark(place: place(mark), note: mark.note),
+      ],
     );
     if (data.isEmpty) {
       messenger.showSnackBar(const SnackBar(
-        content: Text('There are no notes, quotes or highlights to share yet.'),
+        content: Text(
+          'There are no notes, quotes, highlights or bookmarks to share yet.',
+        ),
       ));
       return;
     }

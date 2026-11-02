@@ -13,6 +13,21 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.15.0',
+    date: '2026-11-01',
+    changes: [
+      'Audiobook bookmarks: save the place you are at in the player, with a '
+          'note, and jump back to it later (Bookmark and Bookmarks)',
+      'Bookmarks sync with Chapterly for Windows 1.11.0 and later: added, '
+          'edited and deleted on either side',
+      'Bookmark notes show up in Search notes and quotes, and in the notes '
+          'you share from a book',
+      'Book details added by a newer Chapterly on your PC are kept, so a '
+          'sync never wipes them',
+      'The player buttons wrap onto a second line on a small phone',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.14.0',
     date: '2026-11-01',
     changes: [

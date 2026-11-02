@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'audio/android_audio_files.dart';
+import 'audio/audio_bookmarks.dart';
 import 'audio/audio_library.dart';
 import 'audio/background_audio.dart';
 import 'audio/listen_controller.dart';
@@ -37,6 +38,8 @@ Future<void> main() async {
   );
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
+  // Audiobook bookmarks live with the books, so they sync with the PC.
+  AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);
   await _setUpReading();
   runApp(

@@ -17,7 +17,8 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   .mp3, or a folder of files) and listen in Chapterly. Chapters, 30-second
   skips, speed 0.5x to 3x, sleep timer, playing with the screen off
   (notification, lock screen, headphone buttons). Listening time goes into
-  the reading log, and where you are syncs with the PC. The files are read
+  the reading log. Bookmarks with notes. Where you are and your bookmarks
+  sync with the PC. The files are read
   through Android's file picker, so no storage permission is needed.
 - Reader: add a book's EPUB or PDF file and read it in Chapterly. Tap the
   middle of the page for the tools: chapters, search, bookmarks, text size,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../audio/audio_bookmarks.dart';
 import '../audio/listen_controller.dart';
 import '../audio/listening.dart';
 import '../data/book_repository.dart';
@@ -247,6 +248,170 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (chosen != null) await _c.goToChapter(chosen);
   }
 
+  // ---- Bookmarks (kept with the book, so they sync)
+
+  String _placeLabel(AudioBookmark mark) {
+    final clock = formatPlayerClock(Duration(milliseconds: mark.positionMs));
+    final index = _c.link?.chapterAt(mark.track, mark.trackMs);
+    final chapters = _c.chapters;
+    if (index == null || index >= chapters.length) return clock;
+    return '$clock · ${chapters[index].title}';
+  }
+
+  Future<void> _addBookmark() async {
+    final store = AudioBookmarking.repository;
+    final id = _c.bookId;
+    final progress = _c.progress;
+    if (store == null || id == null || progress == null) return;
+    final track = _c.track;
+    final trackMs = _c.trackPosition.inMilliseconds;
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController();
+    final note = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Add a bookmark'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'At ${formatPlayerClock(Duration(milliseconds: progress.positionMs))}',
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 3,
+              minLines: 1,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (note == null) return;
+    await store.addBookmark(
+      id,
+      AudioBookmark(
+        track: track,
+        trackMs: trackMs,
+        positionMs: progress.positionMs,
+        addedAt: DateTime.now(),
+        note: note.trim(),
+      ),
+    );
+    messenger.showSnackBar(const SnackBar(content: Text('Bookmark added')));
+  }
+
+  Future<void> _editNote(String id, AudioBookmark mark) async {
+    final store = AudioBookmarking.repository;
+    if (store == null) return;
+    final controller = TextEditingController(text: mark.note);
+    final note = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Bookmark note'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          minLines: 1,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (note != null) await store.setBookmarkNote(id, mark, note);
+  }
+
+  Future<void> _showBookmarks() async {
+    final store = AudioBookmarking.repository;
+    final id = _c.bookId;
+    if (store == null || id == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        builder: (context, scroll) => ListenableBuilder(
+          listenable: store,
+          builder: (context, _) {
+            final marks = store.bookmarksFor(id);
+            if (marks.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'No bookmarks yet. Use Bookmark to save the place '
+                    'you are at, with a note if you like.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+            return ListView.builder(
+              controller: scroll,
+              itemCount: marks.length,
+              itemBuilder: (context, index) {
+                final mark = marks[index];
+                return ListTile(
+                  leading: const Icon(Icons.bookmark_outline),
+                  title: Text(_placeLabel(mark)),
+                  subtitle: mark.note.isEmpty ? null : Text(mark.note),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _c.seekTo(
+                      mark.track,
+                      Duration(milliseconds: mark.trackMs),
+                    );
+                  },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Edit note',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _editNote(id, mark),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => store.removeBookmark(id, mark),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   String _sleepLabel() {
     if (_c.sleepAtChapterEnd) return 'End of chapter';
     final left = _c.sleepLeft;
@@ -436,8 +601,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
       ),
       const SizedBox(height: 20),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      // Wraps to a second line on a narrow phone.
+      Wrap(
+        alignment: WrapAlignment.spaceEvenly,
         children: [
           PopupMenuButton<double>(
             tooltip: 'Speed',
@@ -494,6 +660,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 label: 'Chapters',
               ),
             ),
+          if (AudioBookmarking.repository case final store?) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _addBookmark,
+              child: const _PlayerAction(
+                icon: Icons.bookmark_add_outlined,
+                label: 'Bookmark',
+              ),
+            ),
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _showBookmarks,
+              child: ListenableBuilder(
+                listenable: store,
+                builder: (context, _) {
+                  final count = _c.bookId == null
+                      ? 0
+                      : store.bookmarksFor(_c.bookId!).length;
+                  return _PlayerAction(
+                    icon: Icons.bookmarks_outlined,
+                    label: count == 0 ? 'Bookmarks' : 'Bookmarks ($count)',
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     ];

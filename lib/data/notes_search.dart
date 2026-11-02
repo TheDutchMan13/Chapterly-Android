@@ -1,17 +1,19 @@
 import 'dart:math' as math;
 
 import '../ebook/ebook_library.dart';
+import '../models/audio_bookmark.dart';
 import '../models/book.dart';
 import 'fuzzy.dart';
 
-// The same code is in the Windows app; keep the two copies alike.
+// The same code is in both apps; keep the two copies alike.
 
 /// Where a piece of text comes from.
 enum NoteSource {
   notes('Notes'),
   quote('Quote'),
   highlight('Highlight'),
-  highlightNote('Note on a highlight');
+  highlightNote('Note on a highlight'),
+  audioBookmark('Audiobook bookmark');
 
   const NoteSource(this.label);
 
@@ -19,7 +21,7 @@ enum NoteSource {
 }
 
 /// One piece of your own text: a book's notes, a quote, a highlight or a
-/// note on a highlight.
+/// bookmark note.
 class NoteDocument {
   const NoteDocument({
     required this.book,
@@ -63,7 +65,7 @@ List<String> _terms(String text) => [
         if (!_stopWords.contains(word)) _stem(word),
     ];
 
-/// Every note, quote, highlight and highlight note in the library.
+/// Every note, quote, highlight and bookmark note in the library.
 List<NoteDocument> collectNotes(
   List<Book> books, {
   Map<String, EbookLink> ebooks = const {},
@@ -91,6 +93,15 @@ List<NoteDocument> collectNotes(
       final note = highlight.note?.trim() ?? '';
       if (note.isNotEmpty) {
         docs.add(NoteDocument(book: book, source: NoteSource.highlightNote, text: note));
+      }
+    }
+    for (final mark in sortedBookmarks(book.audioBookmarks)) {
+      if (mark.note.trim().isNotEmpty) {
+        docs.add(NoteDocument(
+          book: book,
+          source: NoteSource.audioBookmark,
+          text: mark.note.trim(),
+        ));
       }
     }
   }
