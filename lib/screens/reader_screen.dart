@@ -23,6 +23,7 @@ void openReader(
   required BookRepository repository,
   required EbookLibrary library,
   required String bookId,
+  double? startAt,
 }) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -30,6 +31,7 @@ void openReader(
         repository: repository,
         library: library,
         bookId: bookId,
+        startAt: startAt,
       ),
     ),
   );
