@@ -19,6 +19,7 @@ import 'data/file_io.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
 import 'data/sqlite_book_store.dart';
+import 'data/sync_three_way.dart';
 import 'data/theme_options.dart';
 import 'ebook/android_ebook_files.dart';
 import 'ebook/ebook_library.dart';
@@ -27,6 +28,7 @@ import 'screens/home_shell.dart';
 import 'screens/lock_gate.dart';
 import 'screens/now_playing.dart';
 import 'server/book_server.dart';
+import 'server/library_sync.dart';
 import 'server/server_downloads.dart';
 import 'server/server_state.dart';
 import 'server/server_sync.dart';
@@ -46,8 +48,8 @@ Future<void> main() async {
   // Audiobook bookmarks live with the books, so they sync with the PC.
   AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);
-  await _setUpReading();
-  await _setUpBookServer(repository);
+  await _setUpReading(repository);
+  await _setUpBookServer(repository, settings);
   runApp(
     ChapterlyApp(
       repository: repository,
@@ -107,7 +109,10 @@ class ChapterlyApp extends StatelessWidget {
 
 /// The book server: browsing it, downloads, and keeping your place in its
 /// books the same on every device. If it fails, the app opens without it.
-Future<void> _setUpBookServer(BookRepository repository) async {
+Future<void> _setUpBookServer(
+  BookRepository repository,
+  AppSettings settings,
+) async {
   try {
     final dir = await getApplicationSupportDirectory();
     final state = await ServerState.load(File('${dir.path}/book_server.json'));
@@ -140,6 +145,12 @@ Future<void> _setUpBookServer(BookRepository repository) async {
     );
     BookServer.sync = sync;
     BookServer.downloads = downloads;
+    BookServer.library = LibrarySync(
+      sync: sync,
+      repository: repository,
+      settings: settings,
+      base: await SyncBase.load(File('${dir.path}/book_server_library.json')),
+    );
     sync.start();
     WidgetsBinding.instance.addObserver(_BookServerObserver(sync));
     unawaited(downloads.cleanUp());
@@ -151,18 +162,8 @@ Future<void> _setUpBookServer(BookRepository repository) async {
 
 /// Syncs, and says so when a book moved on to a place saved elsewhere.
 Future<void> _syncAndTell(ServerSync sync) async {
-  if (!sync.state.connected) return;
-  final moved = await sync.syncNow();
-  // Books sent here from your other devices.
-  final came = await BookServer.downloads?.receiveSent() ?? const <String>[];
-  final text = [
-    if (came.length == 1) '"${came.single}" was sent here from another device',
-    if (came.length > 1) '${came.length} books were sent here from another device',
-    if (moved > 0)
-      'Carrying on in $moved ${moved == 1 ? 'book' : 'books'} from where '
-          'you were on another device',
-  ].join('. ');
-  if (text.isEmpty) return;
+  final text = await BookServer.syncAll();
+  if (text == null) return;
   final context = Listening.navigatorKey.currentContext;
   if (context == null || !context.mounted) return;
   ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
@@ -195,12 +196,13 @@ class _BookServerObserver with WidgetsBindingObserver {
 /// The reader: which book file belongs to which book on this phone, and
 /// the folder with Chapterly's copies of the files. If it fails, the app
 /// still opens without the reader.
-Future<void> _setUpReading() async {
+Future<void> _setUpReading(BookRepository repository) async {
   try {
     final dir = await getApplicationSupportDirectory();
     EbookReading.library =
         await EbookLibrary.load(File('${dir.path}/ebook_library.json'));
     EbookReading.files = const AndroidEbookFiles();
+    EbookReading.repository = repository;
     EbookReading.booksDir = Directory('${dir.path}/books');
   } catch (_) {
     // No reader this time.
