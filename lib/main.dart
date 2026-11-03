@@ -24,6 +24,7 @@ import 'data/theme_options.dart';
 import 'ebook/android_ebook_files.dart';
 import 'ebook/ebook_library.dart';
 import 'ebook/ebook_reading.dart';
+import 'home/home_bridge.dart';
 import 'screens/home_shell.dart';
 import 'screens/lock_gate.dart';
 import 'screens/now_playing.dart';
@@ -50,6 +51,12 @@ Future<void> main() async {
   await _setUpListening(repository, settings);
   await _setUpReading(repository);
   await _setUpBookServer(repository, settings);
+  // The home-screen widget and the daily reading reminder.
+  unawaited(HomeBridge(
+    repository: repository,
+    settings: settings,
+    controller: Listening.controller,
+  ).start());
   runApp(
     ChapterlyApp(
       repository: repository,

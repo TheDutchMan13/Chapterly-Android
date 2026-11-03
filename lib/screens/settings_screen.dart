@@ -14,9 +14,11 @@ import '../data/kindle_clippings.dart';
 import '../data/phone_sync.dart';
 import '../data/sync_server.dart';
 import '../data/theme_options.dart';
+import '../home/home_bridge.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'pin_dialogs.dart';
+import 'reminder_settings.dart';
 import 'shelf_order_screen.dart';
 import 'whats_new_screen.dart';
 
@@ -509,6 +511,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   value: widget.settings.goalOnLibrary,
                   onChanged: widget.settings.setGoalOnLibrary,
+                ),
+                ReminderSettings(
+                  settings: widget.settings,
+                  where: 'as a notification',
+                  askPermission: HomeBridge.askNotifications,
                 ),
                 SwitchListTile(
                   title: const Text('Quote of the day on the Library'),

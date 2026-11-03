@@ -1,8 +1,11 @@
 package com.example.chapterly
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
@@ -19,6 +22,10 @@ import java.util.concurrent.Executors
 
 /**
  * AudioServiceActivity lets audiobooks keep playing with the screen off.
+ *
+ * The "chapterly/home" channel feeds the home-screen widget (ChapterlyWidget)
+ * and the daily reading reminder (Reminders), asks to show notifications,
+ * and passes the widget's play/pause button on to the app.
  * The "chapterly/audio_files" channel picks audiobook files and folders with
  * the system picker, keeps permission to read them (so no storage
  * permission is needed) and reads parts of them for lengths and chapters.
@@ -131,6 +138,91 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+        setUpHome(flutterEngine)
+    }
+
+    // ---- The home-screen widget and the reading reminder ----
+
+    private val notifyCode = 4104
+    private var home: MethodChannel? = null
+    private var askingNotifications: MethodChannel.Result? = null
+
+    /** Play/pause on the widget, when it started the app. */
+    private var toggleWaiting = false
+
+    private fun setUpHome(engine: FlutterEngine) {
+        // The activity's intent is there by now (not yet when it is made).
+        if (intent?.action == ChapterlyWidget.ACTION_TOGGLE) toggleWaiting = true
+        home = MethodChannel(engine.dartExecutor.binaryMessenger, "chapterly/home").apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "updateWidget" -> {
+                        ChapterlyWidget.save(
+                            this@MainActivity,
+                            call.argument<String>("title") ?: "Chapterly",
+                            call.argument<String>("author") ?: "",
+                            call.argument<String>("detail") ?: "",
+                            call.argument<Boolean>("audio") ?: false,
+                            call.argument<Boolean>("playing") ?: false,
+                        )
+                        result.success(null)
+                    }
+                    "setReminder" -> {
+                        Reminders.save(
+                            this@MainActivity,
+                            call.argument<Boolean>("on") ?: false,
+                            call.argument<Int>("minutes") ?: (20 * 60),
+                            call.argument<String>("text"),
+                        )
+                        result.success(null)
+                    }
+                    "askNotifications" -> askNotifications(result)
+                    "takeToggle" -> {
+                        result.success(toggleWaiting)
+                        toggleWaiting = false
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    /** Android 13 and later ask once before an app may notify. */
+    private fun askNotifications(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < 33 ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        if (askingNotifications != null) {
+            result.success(false)
+            return
+        }
+        askingNotifications = result
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notifyCode)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != notifyCode) return
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        askingNotifications?.success(granted)
+        askingNotifications = null
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ChapterlyWidget.ACTION_TOGGLE) {
+            val channel = home
+            if (channel != null) channel.invokeMethod("toggle", null) else toggleWaiting = true
+        }
     }
 
     /** While the reader asks for it, the volume buttons turn pages. */
