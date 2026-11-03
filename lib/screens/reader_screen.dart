@@ -101,7 +101,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   String? _initialLocations;
 
   /// [ReaderScreen.startAt], until the book is ready to move there.
-  late double? _pendingStart = widget.startAt;
+  late double? _pendingStart = widget.startAt ??
+      progressFromLocator(widget.library.linkFor(widget.bookId)?.position?.locator);
 
   /// Where a touch started, to tell a tap from a swipe.
   Offset? _touchStart;
@@ -926,7 +927,11 @@ class _ReaderScreenState extends State<ReaderScreen>
       child: EpubViewer(
         epubController: _epub,
         epubSource: EpubSource.fromFile(File(link.path)),
-        initialCfi: link.position?.locator,
+        // A place from another device's reader is gone to by how far
+        // through the book it is, once the book is ready.
+        initialCfi: progressFromLocator(link.position?.locator) == null
+            ? link.position?.locator
+            : null,
         initialLocations: _initialLocations,
         displaySettings: EpubDisplaySettings(
           fontSize: prefs.fontSize,
