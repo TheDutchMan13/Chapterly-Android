@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_info.dart';
@@ -942,8 +943,15 @@ class _SyncSettings extends StatelessWidget {
                 if (addresses.isEmpty) {
                   return const Text('No Wi-Fi connection found.');
                 }
-                return Text(
-                  [for (final a in addresses) '$a:${phoneSync.port}'].join('\n'),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final a in addresses)
+                      _CopyLine(
+                        text: '$a:${phoneSync.port}',
+                        copied: 'Address copied',
+                      ),
+                  ],
                 );
               },
             ),
@@ -951,7 +959,15 @@ class _SyncSettings extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.pin_outlined),
             title: const Text('Pairing code'),
-            subtitle: Text(code == null ? 'Not set' : _groupCode(code)),
+            subtitle: code == null
+                ? const Text('Not set')
+                : _CopyLine(
+                    text: _groupCode(code),
+                    // Copied without dashes: what the PC accepts and a
+                    // password manager can keep as it is.
+                    copyText: code,
+                    copied: 'Pairing code copied',
+                  ),
             trailing: TextButton(
               onPressed: () async {
                 settings.setSyncCode(newSyncCode());
@@ -976,6 +992,43 @@ class _SyncSettings extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// A line of text you can tap to copy, for the address and pairing code (to
+/// paste into the PC app or keep in a password manager).
+class _CopyLine extends StatelessWidget {
+  const _CopyLine({required this.text, required this.copied, this.copyText});
+
+  final String text;
+  final String? copyText;
+  final String copied;
+
+  @override
+  Widget build(BuildContext context) {
+    final messenger = ScaffoldMessenger.of(context);
+    return Tooltip(
+      message: 'Copy',
+      child: InkWell(
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: copyText ?? text));
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(copied)));
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: Text(text)),
+              const SizedBox(width: 8),
+              const Icon(Icons.copy, size: 16),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
