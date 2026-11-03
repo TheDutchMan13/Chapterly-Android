@@ -63,8 +63,10 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/chapterly_widget_info" />
         </receiver>
-        <!-- The daily reading reminder. -->
-        <receiver android:name=".ReminderReceiver" android:exported="true">
+        <!-- The daily reading reminder: posted by an alarm only this app sets,
+             and set again after a restart or an update. -->
+        <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".ReminderBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

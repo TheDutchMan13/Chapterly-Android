@@ -21,9 +21,16 @@ import java.util.Calendar
  */
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Reminders.ACTION_REMIND) Reminders.post(context)
+    }
+}
+
+/** Sets the reminder again after the phone restarts or the app is updated.
+ * Only this one is open to the system's broadcasts. */
+class ReminderBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Reminders.schedule(context)
-            Reminders.ACTION_REMIND -> Reminders.post(context)
         }
     }
 }

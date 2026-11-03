@@ -152,7 +152,15 @@ class MainActivity : AudioServiceActivity() {
 
     private fun setUpHome(engine: FlutterEngine) {
         // The activity's intent is there by now (not yet when it is made).
-        if (intent?.action == ChapterlyWidget.ACTION_TOGGLE) toggleWaiting = true
+        // Reopened from recents, the same intent comes back: not a new tap.
+        val start = intent
+        if (start?.action == ChapterlyWidget.ACTION_TOGGLE &&
+            start.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
+        ) {
+            toggleWaiting = true
+        }
+        // Played once: don't let a restart of the activity play it again.
+        if (start?.action == ChapterlyWidget.ACTION_TOGGLE) intent = Intent(start).setAction(Intent.ACTION_MAIN)
         home = MethodChannel(engine.dartExecutor.binaryMessenger, "chapterly/home").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
