@@ -21,6 +21,8 @@ const changelog = [
           'into your library (For later) when you get it',
       'The wish list syncs with Chapterly for Windows 1.12.0 or later: added, '
           'edited and deleted on either side (the newer change wins)',
+      'Sync with a PC: tap the address or the pairing code to copy it, to '
+          'paste into the PC app or keep in a password manager',
     ],
   ),
   ChangelogEntry(
