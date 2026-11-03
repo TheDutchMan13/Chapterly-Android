@@ -13,6 +13,20 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.17.0',
+    date: '2026-11-03',
+    changes: [
+      'Book server (More): connect to your own Chapterly book server, then '
+          'browse and search your library there and download ebooks and '
+          'audiobooks into Chapterly',
+      'A book you download goes on For later, or is linked to the same book '
+          'when it is already in your library',
+      'Your place in those books syncs with your other devices: open a book '
+          'and Chapterly carries on from the furthest place you reached',
+      'Audiobook bookmarks sync through the book server too',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.16.0',
     date: '2026-11-02',
     changes: [

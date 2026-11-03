@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
@@ -25,6 +26,10 @@ import 'ebook/ebook_reading.dart';
 import 'screens/home_shell.dart';
 import 'screens/lock_gate.dart';
 import 'screens/now_playing.dart';
+import 'server/book_server.dart';
+import 'server/server_downloads.dart';
+import 'server/server_state.dart';
+import 'server/server_sync.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +47,7 @@ Future<void> main() async {
   AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);
   await _setUpReading();
+  await _setUpBookServer(repository);
   runApp(
     ChapterlyApp(
       repository: repository,
@@ -96,6 +102,79 @@ class ChapterlyApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The book server: browsing it, downloads, and keeping your place in its
+/// books the same on every device. If it fails, the app opens without it.
+Future<void> _setUpBookServer(BookRepository repository) async {
+  try {
+    final dir = await getApplicationSupportDirectory();
+    final state = await ServerState.load(File('${dir.path}/book_server.json'));
+    final sync = ServerSync(
+      state: state,
+      repository: repository,
+      ebooks: EbookReading.library,
+      isOpen: (bookId) =>
+          EbookReading.openBookId == bookId ||
+          Listening.controller?.bookId == bookId,
+    );
+    final downloads = ServerDownloads(
+      sync: sync,
+      repository: repository,
+      ebooks: EbookReading.library,
+      booksDir: EbookReading.booksDir,
+      audio: Listening.controller?.library,
+      audioFiles: Listening.files,
+      audioDir: Directory('${dir.path}/server_audio'),
+    );
+    BookServer.sync = sync;
+    BookServer.downloads = downloads;
+    sync.start();
+    WidgetsBinding.instance.addObserver(_BookServerObserver(sync));
+    unawaited(downloads.cleanUp());
+    unawaited(_syncAndTell(sync));
+  } catch (_) {
+    // No book server this time.
+  }
+}
+
+/// Syncs, and says so when a book moved on to a place saved elsewhere.
+Future<void> _syncAndTell(ServerSync sync) async {
+  if (!sync.state.connected) return;
+  final moved = await sync.syncNow();
+  if (moved == 0) return;
+  final context = Listening.navigatorKey.currentContext;
+  if (context == null || !context.mounted) return;
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+    content: Text(
+      'Carrying on in $moved ${moved == 1 ? 'book' : 'books'} from where '
+      'you were on another device',
+    ),
+  ));
+}
+
+/// Syncs your places when Chapterly comes back to the front, and sends them
+/// when it goes to the back.
+class _BookServerObserver with WidgetsBindingObserver {
+  _BookServerObserver(this.sync);
+
+  final ServerSync sync;
+  DateTime? _last;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      unawaited(sync.send());
+    } else if (state == AppLifecycleState.resumed) {
+      final last = _last;
+      final now = DateTime.now();
+      if (last != null && now.difference(last) < const Duration(seconds: 30)) {
+        return;
+      }
+      _last = now;
+      unawaited(_syncAndTell(sync));
+    }
   }
 }
 

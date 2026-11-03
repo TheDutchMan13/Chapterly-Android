@@ -5,6 +5,7 @@ import '../data/book_repository.dart';
 import '../data/file_io.dart';
 import '../data/phone_sync.dart';
 import '../models/book.dart';
+import '../server/book_server.dart';
 import 'book_detail_screen.dart';
 import 'duplicates_screen.dart';
 import 'library_health_screen.dart';
@@ -12,6 +13,7 @@ import 'manage_shelves_screen.dart';
 import 'next_up_screen.dart';
 import 'notes_search_screen.dart';
 import 'read_next_screen.dart';
+import 'server_screen.dart';
 import 'series_screen.dart';
 import 'settings_screen.dart';
 import 'tags_screen.dart';
@@ -96,6 +98,30 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           heading('Your books'),
+          if (BookServer.sync case final sync?)
+            if (BookServer.downloads case final downloads?)
+              ListenableBuilder(
+                listenable: sync.state,
+                builder: (context, _) => ListTile(
+                  leading: const Icon(Icons.dns_outlined),
+                  title: const Text('Book server'),
+                  subtitle: Text(
+                    sync.state.connected
+                        ? 'Signed in as ${sync.state.name ?? 'you'}'
+                        : 'Browse and download your own library',
+                  ),
+                  onTap: () => _push(
+                    context,
+                    ServerScreen(
+                      repository: repository,
+                      settings: settings,
+                      fileIo: fileIo,
+                      sync: sync,
+                      downloads: downloads,
+                    ),
+                  ),
+                ),
+              ),
           ListTile(
             leading: const Icon(Icons.format_list_numbered),
             title: const Text('Next up'),
