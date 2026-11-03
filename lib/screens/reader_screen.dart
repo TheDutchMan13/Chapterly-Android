@@ -10,22 +10,37 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/book_repository.dart';
 import '../ebook/android_reader_device.dart';
 import '../ebook/ebook_library.dart';
+import '../ebook/ebook_reading.dart';
 import '../ebook/reader_stats.dart';
 import '../ebook/reader_style.dart';
 import '../ebook/reader_tools.dart';
 import '../models/book.dart';
 import '../models/shelf.dart';
+import '../server/book_server.dart';
 import 'reader_widgets.dart';
 
 /// Opens the reader for a book that has a book file on this device.
-void openReader(
+Future<void> openReader(
   BuildContext context, {
   required BookRepository repository,
   required EbookLibrary library,
   required String bookId,
   double? startAt,
-}) {
-  Navigator.of(context).push(
+}) async {
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  // A further place saved on another device (book server), if there is one.
+  final sync = BookServer.sync;
+  if (startAt == null &&
+      sync != null &&
+      sync.state.linkFor(bookId, 'ebook') != null) {
+    if (await sync.takeLatest(bookId, 'ebook')) {
+      messenger?.showSnackBar(const SnackBar(
+        content: Text('Carrying on from where you were on another device'),
+      ));
+    }
+  }
+  await navigator.push(
     MaterialPageRoute<void>(
       builder: (_) => ReaderScreen(
         repository: repository,
@@ -86,7 +101,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   String? _initialLocations;
 
   /// [ReaderScreen.startAt], until the book is ready to move there.
-  late double? _pendingStart = widget.startAt;
+  late double? _pendingStart = widget.startAt ??
+      progressFromLocator(widget.library.linkFor(widget.bookId)?.position?.locator);
 
   /// Where a touch started, to tell a tap from a swipe.
   Offset? _touchStart;
@@ -119,6 +135,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    EbookReading.openBookId = widget.bookId;
     final link = _link;
     if (link == null || !File(link.path).existsSync()) {
       _problem = 'The book file is missing on this phone. Add it again from '
@@ -156,6 +173,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (EbookReading.openBookId == widget.bookId) EbookReading.openBookId = null;
     _saveTimer?.cancel();
     _logTimer?.cancel();
     _reading.stop();
@@ -909,7 +927,11 @@ class _ReaderScreenState extends State<ReaderScreen>
       child: EpubViewer(
         epubController: _epub,
         epubSource: EpubSource.fromFile(File(link.path)),
-        initialCfi: link.position?.locator,
+        // A place from another device's reader is gone to by how far
+        // through the book it is, once the book is ready.
+        initialCfi: progressFromLocator(link.position?.locator) == null
+            ? link.position?.locator
+            : null,
         initialLocations: _initialLocations,
         displaySettings: EpubDisplaySettings(
           fontSize: prefs.fontSize,
