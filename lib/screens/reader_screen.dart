@@ -31,8 +31,10 @@ Future<void> openReader(
   final messenger = ScaffoldMessenger.maybeOf(context);
   // A further place saved on another device (book server), if there is one.
   final sync = BookServer.sync;
-  if (startAt == null && sync != null && sync.state.linkFor(bookId) != null) {
-    if (await sync.takeLatest(bookId)) {
+  if (startAt == null &&
+      sync != null &&
+      sync.state.linkFor(bookId, 'ebook') != null) {
+    if (await sync.takeLatest(bookId, 'ebook')) {
       messenger?.showSnackBar(const SnackBar(
         content: Text('Carrying on from where you were on another device'),
       ));
