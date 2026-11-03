@@ -85,6 +85,11 @@ class _Phone {
       ebooks.setPosition(bookId, EbookPosition(locator: cfi, progress: fraction));
 }
 
+/// The file behind a player location: a file:// address on the phone, a
+/// path on the PC.
+String _audioPath(String location) =>
+    location.startsWith('file:') ? Uri.parse(location).toFilePath() : location;
+
 class _MemoryTokens implements TokenStore {
   String? value;
 
@@ -245,11 +250,12 @@ void main() {
       expect(await phone.sync.receive(), 1);
     });
 
-    test('a place from the PC\'s reader is not jumped to', () async {
+    test('a place from the other device\'s reader is not jumped to', () async {
+      final other = localEpubPositionKind == 'epub-cfi' ? 'epub-win' : 'epub-cfi';
       final id = await phone.download('dune');
       await phone.readTo(id, 0.1);
       await phone.sync.send();
-      server.save('dune', 0.5, 'epub-win:3|200');
+      server.save('dune', 0.5, '$other:3|200');
       expect(await phone.sync.receive(), 0);
       expect(phone.ebooks.linkFor(id)!.position!.progress, 0.1);
     });
@@ -457,9 +463,9 @@ void main() {
       final id = await phone.download('hail');
       expect(phone.repository.byId(id)!.format, BookFormat.audiobook);
       final track = phone.audio.linkFor(id)!.tracks.single;
-      expect(track.location, startsWith('file://'));
+      expect(track.location, audioLocationFor(_audioPath(track.location)));
       expect(track.lengthMs, 600000);
-      expect(File(Uri.parse(track.location).toFilePath()).existsSync(), isTrue);
+      expect(File(_audioPath(track.location)).existsSync(), isTrue);
     });
 
     test('a failed download leaves nothing behind', () async {
@@ -479,7 +485,7 @@ void main() {
 
     test('cleaning up deletes only audio no book uses', () async {
       final id = await phone.download('hail');
-      final kept = Uri.parse(phone.audio.linkFor(id)!.tracks.single.location).toFilePath();
+      final kept = _audioPath(phone.audio.linkFor(id)!.tracks.single.location);
       final stray = File('${phone.dir.path}/audio/stray.m4b')..writeAsStringSync('x');
       await phone.downloads.cleanUp();
       expect(File(kept).existsSync(), isTrue);
