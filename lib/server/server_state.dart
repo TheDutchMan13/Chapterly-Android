@@ -102,20 +102,30 @@ class ServerLink {
   }
 }
 
+/// Where your token is kept, when not in the state file: the PC keeps it in
+/// Windows' protected storage. The phone keeps it in the state file, in the
+/// app's own folder, which other apps can't read.
+abstract interface class TokenStore {
+  Future<String?> read();
+  Future<void> write(String token);
+  Future<void> delete();
+}
+
 /// Your book server on this device: its address, your token, and which
 /// books here belong to which books there. Kept in a file in the app's own
 /// folder.
 class ServerState extends ChangeNotifier {
-  ServerState({this.file});
+  ServerState({this.file, this.tokens});
 
   final File? file;
+  final TokenStore? tokens;
   Uri? _address;
   String? _token;
   String? _name;
   final _links = <String, ServerLink>{};
 
-  static Future<ServerState> load(File file) async {
-    final state = ServerState(file: file);
+  static Future<ServerState> load(File file, {TokenStore? tokens}) async {
+    final state = ServerState(file: file, tokens: tokens);
     try {
       if (await file.exists()) {
         final data = jsonDecode(await file.readAsString());
@@ -124,6 +134,17 @@ class ServerState extends ChangeNotifier {
     } catch (_) {
       // A damaged file: start again; you connect once more.
     }
+    if (tokens != null && state._address != null) {
+      try {
+        state._token = await tokens.read();
+      } catch (_) {
+        state._token = null;
+      }
+    }
+    if (state._token == null || state._token!.isEmpty) {
+      state._token = null;
+      state._address = null;
+    }
     return state;
   }
 
@@ -131,9 +152,9 @@ class ServerState extends ChangeNotifier {
     final address = data['address'];
     final token = data['token'];
     final name = data['name'];
-    if (address is String && token is String && token.isNotEmpty) {
+    if (address is String) {
       _address = parseServerAddress(address);
-      _token = _address == null ? null : token;
+      _token = tokens == null && token is String ? token : null;
       _name = name is String ? name : null;
     }
     final links = data['links'];
@@ -168,6 +189,7 @@ class ServerState extends ChangeNotifier {
 
   Future<void> connect(Uri address, String token, String name) async {
     final changedServer = _address != null && _address != address;
+    await tokens?.write(token);
     _address = address;
     _token = token;
     _name = name;
@@ -178,6 +200,11 @@ class ServerState extends ChangeNotifier {
 
   /// Forgets the server and your token. Downloaded books stay.
   Future<void> disconnect() async {
+    try {
+      await tokens?.delete();
+    } catch (_) {
+      // Gone already.
+    }
     _address = null;
     _token = null;
     _name = null;
@@ -213,7 +240,7 @@ class ServerState extends ChangeNotifier {
     if (file == null) return Future.value();
     final data = jsonEncode({
       if (_address != null) 'address': _address.toString(),
-      if (_token != null) 'token': _token,
+      if (_token != null && tokens == null) 'token': _token,
       if (_name != null) 'name': _name,
       'links': {for (final e in _links.entries) e.key: e.value.toJson()},
     });

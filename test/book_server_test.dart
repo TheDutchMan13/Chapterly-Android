@@ -85,6 +85,19 @@ class _Phone {
       ebooks.setPosition(bookId, EbookPosition(locator: cfi, progress: fraction));
 }
 
+class _MemoryTokens implements TokenStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String token) async => value = token;
+
+  @override
+  Future<void> delete() async => value = null;
+}
+
 void main() {
   group('the server address you type', () {
     test('gets http and the default port', () {
@@ -493,6 +506,26 @@ void main() {
       expect(again.bookIdFor('s1'), 'a');
       file.writeAsStringSync('{broken');
       expect((await ServerState.load(file)).connected, isFalse);
+    });
+
+    test('a token store keeps the token out of the file', () async {
+      final dir = await Directory.systemTemp.createTemp('chapterly_state');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/book_server.json');
+      final tokens = _MemoryTokens();
+      final state = await ServerState.load(file, tokens: tokens);
+      await state.connect(Uri.parse('http://100.1.2.3:8780'), 'tok-123', 'hans');
+      expect(file.readAsStringSync(), isNot(contains('tok-123')));
+      expect(tokens.value, 'tok-123');
+      final again = await ServerState.load(file, tokens: tokens);
+      expect(again.connected, isTrue);
+      expect(again.token, 'tok-123');
+      await again.disconnect();
+      expect(tokens.value, isNull);
+      // A token lost from the store means connecting again.
+      await again.connect(Uri.parse('http://100.1.2.3:8780'), 'tok-123', 'hans');
+      tokens.value = null;
+      expect((await ServerState.load(file, tokens: tokens)).connected, isFalse);
     });
 
     test('one book here per book there, and another server starts afresh',
