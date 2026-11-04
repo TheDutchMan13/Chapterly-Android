@@ -16,6 +16,19 @@ const _prefix = 'chapterly-auto-';
 /// first profile. Set at start-up.
 String? autoBackupSubfolder;
 
+/// Where a profile with a PIN keeps its automatic backups: inside the app's
+/// own storage, which other apps and other profiles can't open. Set at
+/// start-up; tests may set it too.
+Directory? autoBackupPrivateFolder;
+
+/// The folder for automatic backups of a profile with a PIN.
+Future<Directory> privateAutoBackupFolder() async {
+  final set = autoBackupPrivateFolder;
+  if (set != null) return set;
+  final base = await getApplicationSupportDirectory();
+  return Directory('${base.path}/backups');
+}
+
 String _two(int n) => n.toString().padLeft(2, '0');
 
 /// chapterly-auto-2026-10-29-2141.json, so the names sort by date.
@@ -87,6 +100,19 @@ Future<String> writeAutoBackup({
   );
 }
 
+/// Removes this profile's automatic backups from the shared [folders], once
+/// newer ones are kept privately (the profile has a PIN). Backups saved by
+/// hand are not touched.
+Future<void> removeSharedAutoBackups(List<Directory> folders) async {
+  for (final folder in folders) {
+    try {
+      if (await folder.exists()) await pruneAutoBackups(folder, keep: 0);
+    } on FileSystemException {
+      // Not allowed to look there: nothing to remove.
+    }
+  }
+}
+
 bool _running = false;
 
 /// Makes an automatic backup when it is switched on and due (or always,
@@ -103,11 +129,16 @@ Future<void> runAutoBackup(
   if (!repository.isLoaded || repository.allBooks.isEmpty) return;
   _running = true;
   try {
+    final locked = settings.pinEnabled;
     final path = await writeAutoBackup(
       content: encodeBackup(repository.allBooks, now: time),
-      folders: await autoBackupFolders(),
+      // A PIN-locked profile's backups stay where only Chapterly, open on
+      // that profile, can read them: a shared folder could be restored from
+      // another profile, or read by any app.
+      folders: locked ? [await privateAutoBackupFolder()] : await autoBackupFolders(),
       now: time,
     );
+    if (locked) await removeSharedAutoBackups(await autoBackupFolders());
     settings.recordAutoBackup(at: time, path: path);
   } on FileSystemException catch (error) {
     settings.recordAutoBackupError(error.message);

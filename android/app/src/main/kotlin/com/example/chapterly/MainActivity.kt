@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.KeyEvent
@@ -156,6 +157,12 @@ class MainActivity : AudioServiceActivity() {
         setUpHome(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "chapterly/app")
             .setMethodCallHandler { call, result ->
+                if (call.method == "uptime") {
+                    // Time since the phone was switched on, which changing
+                    // the clock does not move (for the PIN waits).
+                    result.success(SystemClock.elapsedRealtime())
+                    return@setMethodCallHandler
+                }
                 if (call.method == "secure") {
                     // Blank in the recent apps, and no screenshots.
                     if (call.arguments == true) {

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/json_file.dart';
+
 /// The kinds of book file the reader opens.
 enum EbookFormat { epub, pdf }
 
@@ -565,10 +567,16 @@ class EbookLibrary extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // A damaged file only loses the links; the books are untouched.
+      // A damaged file only loses the links; the books are untouched. It is
+      // kept aside so the next save does not write over it.
+      library._links.clear();
+      library._prefs = const ReaderPrefs();
+      await setAsideDamaged(file);
     }
     return library;
   }
+
+  final _writer = SafeFileWriter();
 
   EbookLink? linkFor(String bookId) => _links[bookId];
 
@@ -759,25 +767,24 @@ class EbookLibrary extends ChangeNotifier {
   /// Every book with a file on this device, by book id.
   Map<String, EbookLink> get links => Map.unmodifiable(_links);
 
-  Future<void> _save() async {
+  /// Saves the library as it is now. Saves run one at a time, in order, so
+  /// two quick changes (whose callers may not wait) can't mix their text.
+  Future<void> _save() {
     final target = file;
-    if (target == null) return;
+    if (target == null) return Future.value();
+    final String text;
     try {
-      final data = {
+      text = jsonEncode({
         'links': {
           for (final entry in _links.entries) entry.key: entry.value.toJson(),
         },
         'prefs': _prefs.toJson(),
-      };
-      await target.parent.create(recursive: true);
-      // Written beside the real file first, so a crash mid-write never
-      // leaves a half-written file.
-      final temp = File('${target.path}.tmp');
-      await temp.writeAsString(jsonEncode(data));
-      await temp.rename(target.path);
+      });
     } catch (_) {
       // Not saved this time; the next change tries again.
+      return Future.value();
     }
+    return _writer.write(target, text);
   }
 }
 

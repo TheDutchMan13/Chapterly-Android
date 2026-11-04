@@ -626,10 +626,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 SwitchListTile(
                   title: const Text('Back up by itself'),
-                  subtitle: const Text(
-                    'Saves a backup file in Documents/Chapterly when you open '
-                    'the app, and keeps the last $autoBackupKeep. That folder '
-                    'stays when the app is uninstalled.',
+                  subtitle: Text(
+                    widget.settings.pinEnabled
+                        ? 'Saves a backup when you open the app, and keeps '
+                            'the last $autoBackupKeep. With the app lock on, '
+                            'they are kept inside Chapterly where other apps '
+                            'and profiles can\'t open them, so they are gone '
+                            'if the app is uninstalled. Use Export backup to '
+                            'keep a copy elsewhere.'
+                        : 'Saves a backup file in Documents/Chapterly when you '
+                            'open the app, and keeps the last $autoBackupKeep. '
+                            'That folder stays when the app is uninstalled.',
                   ),
                   value: widget.settings.autoBackup,
                   onChanged: widget.settings.setAutoBackup,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/app_settings.dart';
+import '../data/pin_lock.dart';
 
 /// Asks for a new PIN twice. Returns it, or null if cancelled.
 Future<String?> askNewPin(BuildContext context) {
@@ -102,7 +103,16 @@ class _CurrentPinDialog extends StatefulWidget {
 
 class _CurrentPinDialogState extends State<_CurrentPinDialog> {
   final _pin = TextEditingController();
-  String? _error;
+  // The same count of wrong PINs as the lock screen.
+  late final _guard = PinGuard(widget.settings.prefs);
+  late String? _error = _waitText();
+
+  String? _waitText() {
+    final left = _guard.waitLeft();
+    if (left <= Duration.zero) return null;
+    final seconds = (left.inMilliseconds / 1000).ceil();
+    return 'Too many tries. Wait $seconds seconds.';
+  }
 
   @override
   void dispose() {
@@ -111,10 +121,11 @@ class _CurrentPinDialogState extends State<_CurrentPinDialog> {
   }
 
   void _check() {
-    if (widget.settings.checkPin(_pin.text)) {
+    if (_guard.attempt(_pin.text, widget.settings.checkPin)) {
       Navigator.of(context).pop(true);
     } else {
-      setState(() => _error = 'Wrong PIN.');
+      _pin.clear();
+      setState(() => _error = _waitText() ?? 'Wrong PIN.');
     }
   }
 

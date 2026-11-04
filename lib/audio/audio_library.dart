@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/json_file.dart';
+
 import '../models/audio_progress.dart';
 
 /// Audio files Chapterly can play.
@@ -244,10 +246,16 @@ class AudioLibrary extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // A damaged file only loses the links; the books are untouched.
+      // A damaged file only loses the links; the books are untouched. It is
+      // kept aside so the next save does not write over it.
+      library._links.clear();
+      library._speed = 1.0;
+      await setAsideDamaged(file);
     }
     return library;
   }
+
+  final _writer = SafeFileWriter();
 
   AudioLink? linkFor(String bookId) => _links[bookId];
 
@@ -288,19 +296,23 @@ class AudioLibrary extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> _save() async {
+  /// Saves the library as it is now, one save at a time and through a
+  /// temporary file, so quick changes can't mix their text.
+  Future<void> _save() {
     final target = file;
-    if (target == null) return;
+    if (target == null) return Future.value();
+    final String text;
     try {
-      await target.parent.create(recursive: true);
-      await target.writeAsString(jsonEncode({
+      text = jsonEncode({
         'speed': _speed,
         'links': {
           for (final entry in _links.entries) entry.key: entry.value.toJson(),
         },
-      }));
+      });
     } catch (_) {
       // Not saved; it is tried again on the next change.
+      return Future.value();
     }
+    return _writer.write(target, text);
   }
 }

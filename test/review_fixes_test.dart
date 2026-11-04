@@ -140,7 +140,13 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final prefs = ScopedPrefs(await SharedPreferences.getInstance(), 'p.x.');
       var now = DateTime(2026, 11, 4, 12);
-      PinGuard guard() => PinGuard(prefs, clock: () => now);
+      final start = now;
+      PinGuard guard() => PinGuard(
+            prefs,
+            clock: () => now,
+            uptime: () => now.difference(start).inMilliseconds,
+            uptimeKind: 'boot',
+          );
       bool right(String pin) => pin == '1234';
 
       for (var i = 0; i < 4; i++) {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data' show BytesBuilder, Uint8List;
 import 'dart:io';
@@ -120,10 +119,10 @@ class SyncServer {
   SyncKey? _key;
 
   /// Challenges given out, oldest first, with when they were given.
-  final _challenges = LinkedHashMap<String, DateTime>();
+  final _challenges = <String, DateTime>{};
 
   /// Nonces of requests already answered, oldest first.
-  final _nonces = LinkedHashMap<String, DateTime>();
+  final _nonces = <String, DateTime>{};
 
   /// When recent messages failed to open.
   final _failures = <DateTime>[];

@@ -17,6 +17,7 @@ import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
+import 'data/pin_lock.dart';
 import 'data/profile_files.dart';
 import 'data/profiles.dart';
 import 'data/sqlite_book_store.dart';
@@ -40,6 +41,9 @@ String _profileId = mainProfileId;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Before any PIN is asked for, so waits for wrong PINs hold even if the
+  // clock is changed.
+  await PinGuard.readDeviceUptime();
   // The open profile. Choosing another one restarts Chapterly with it.
   final profiles = await ProfileStore.load();
   final profile = profiles.active;
@@ -53,6 +57,12 @@ Future<void> main() async {
     await restartChapterly();
   };
   autoBackupSubfolder = profileBackupFolder(profile);
+  try {
+    autoBackupPrivateFolder =
+        Directory('${(await profileFolder(profile.id)).path}/backups');
+  } catch (_) {
+    // The app's own backups folder is used.
+  }
   final repository = BookRepository(
     await SqliteBookStore.open(fileName: profileDatabaseName(profile.id)),
   );
