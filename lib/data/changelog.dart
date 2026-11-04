@@ -13,6 +13,16 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.23.0',
+    date: '2026-11-04',
+    changes: [
+      'Pair with your PC by scanning a code: in Settings, tap "Scan code '
+          'from your PC" and point the camera at the code shown by Chapterly '
+          'on your PC. It turns on sync if it was off, and your PC finds '
+          'the phone by itself. Typing the address and code still works',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.22.0',
     date: '2026-11-04',
     changes: [

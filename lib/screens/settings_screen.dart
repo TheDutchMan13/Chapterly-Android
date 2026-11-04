@@ -18,6 +18,7 @@ import '../data/theme_options.dart';
 import '../home/home_bridge.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
+import 'pair_scan_screen.dart';
 import 'pin_dialogs.dart';
 import 'profiles_screen.dart';
 import 'reminder_settings.dart';
@@ -969,6 +970,30 @@ class _SyncSettings extends StatelessWidget {
     return '${formatDateTime(at)} · $what';
   }
 
+  Future<void> _scanFromPc(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const PairScanScreen()),
+    );
+    if (code == null) return;
+    final wasOff = !settings.syncEnabled;
+    // Listening has to be on for the PC to find this phone.
+    if (wasOff) settings.setSyncEnabled(true);
+    settings.setSyncCode(code);
+    // Restarts the server, which derives its key from the new code.
+    await phoneSync.refresh();
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            '${wasOff ? 'Sync was turned on. ' : ''}Code set. Your PC will '
+            'find this phone in a few seconds \u2014 keep Chapterly open.',
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final code = settings.syncCode;
@@ -985,6 +1010,14 @@ class _SyncSettings extends StatelessWidget {
             settings.setSyncEnabled(value);
             await phoneSync.refresh();
           },
+        ),
+        ListTile(
+          leading: const Icon(Icons.qr_code_scanner),
+          title: const Text('Scan code from your PC'),
+          subtitle: const Text(
+            'Point the camera at the code on your PC to pair.',
+          ),
+          onTap: () => _scanFromPc(context),
         ),
         if (settings.syncEnabled) ...[
           ListTile(

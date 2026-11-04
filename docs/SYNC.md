@@ -34,6 +34,27 @@ What follows describes the content of the messages, which is unchanged.
 2. On the PC: enter the address and the code once. Remove the dashes from the
    code (`ABCD-EFGH-...` becomes `ABCDEFGH...`).
 
+### Pairing with a QR code (Chapterly 1.23.0 and later)
+
+Instead of typing, the PC can show a QR code and the phone scans it:
+
+1. The PC shows a QR code whose text is exactly `chapterly-pair:1:<CODE>`,
+   where `<CODE>` is 16 characters A-Z and 0-9 (the pairing code without
+   dashes, uppercase). Nothing else is in it.
+2. On the phone: Settings > Sync with a PC > "Scan code from your PC". Only
+   text matching `^chapterly-pair:1:[A-Z0-9]{16}$` (spaces around it are
+   ignored) is accepted; other codes are ignored.
+3. The phone turns sync on if it was off, stores `<CODE>` as its pairing code
+   and restarts its sync server, so the key derived from the code
+   (`sync_crypto.dart`) is the new one at once. It then says "Code set".
+4. The PC finds the phone on the home Wi-Fi by itself (for example by trying
+   `/v1/ping` on the local network) and checks the code with `/v2/hello` and
+   a sealed request. The phone only listens while Chapterly is open on the
+   screen, so it must stay open until the PC has paired.
+
+The old code is replaced, as with "New code". The manual address and code
+still work.
+
 Port: 8765. The code is sent in the `Authorization` header, so only use this
 on your own home network. Anyone on the same Wi-Fi with the code can read and
 change your library. Press "New code" on the phone to revoke access.
