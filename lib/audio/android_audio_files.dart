@@ -38,11 +38,27 @@ class AndroidAudioFiles implements AudioFiles {
   @override
   Uri playable(String location) => Uri.parse(location);
 
+  /// Every audio file still linked to a book, in any profile on this
+  /// phone. Set at start-up. Android's permission to read a file (or the
+  /// folder it was picked with) is one for the whole app, so it is only let
+  /// go when nothing else still uses it.
+  static Future<List<String>> Function()? inUse;
+
   @override
   Future<void> release(List<String> locations) async {
     if (locations.isEmpty) return;
+    List<String> keep;
     try {
-      await _channel.invokeMethod<void>('release', {'uris': locations});
+      keep = await inUse?.call() ?? const [];
+    } catch (_) {
+      // Not known what is still used: keep every permission.
+      return;
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'release',
+        {'uris': locations, 'keep': keep},
+      );
     } on PlatformException {
       // Already released.
     }

@@ -253,6 +253,12 @@ class AudioLibrary extends ChangeNotifier {
 
   bool hasAudio(String bookId) => _links.containsKey(bookId);
 
+  /// Where every linked audio file is.
+  List<String> get locations => [
+        for (final link in _links.values)
+          for (final track in link.tracks) track.location,
+      ];
+
   double get speed => _speed;
 
   Future<void> setLink(String bookId, AudioLink link) async {

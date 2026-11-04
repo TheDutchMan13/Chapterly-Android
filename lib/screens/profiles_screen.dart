@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/pin_lock.dart';
 import '../data/profiles.dart';
 
 /// A profile's coloured circle with its first letter.
@@ -207,11 +208,26 @@ class ProfilesScreen extends StatelessWidget {
 
   Future<void> _delete(BuildContext context, Profile profile) async {
     if (store.hasPin(profile.id)) {
+      // The same count of wrong PINs as the profile's lock screen.
+      final guard = PinGuard(store.scope(profile.id));
+      String waitMessage() {
+        final seconds = (guard.waitLeft().inMilliseconds / 1000).ceil();
+        return 'Too many tries. Wait $seconds seconds.';
+      }
+
+      if (guard.waitLeft() > Duration.zero) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(waitMessage())));
+        return;
+      }
       final pin = await _askPin(context, profile);
       if (pin == null || !context.mounted) return;
-      if (!store.checkPin(profile.id, pin)) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Wrong PIN.')));
+      if (!guard.attempt(pin, (pin) => store.checkPin(profile.id, pin))) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            guard.waitLeft() > Duration.zero ? waitMessage() : 'Wrong PIN.',
+          ),
+        ));
         return;
       }
     }

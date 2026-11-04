@@ -62,6 +62,18 @@ Future<List<String>> localAddresses() async {
 ///   references (see sync_covers.dart), never the pictures.
 /// - `POST /v1/covers/missing`, `PUT /v1/covers/<name>` and
 ///   `GET /v1/covers/<name>` (with the code) move the cover pictures.
+/// Compares a secret in the same time however much of it is right, so the
+/// time an answer takes tells nothing about the code.
+bool sameSecret(String? given, String expected) {
+  final a = utf8.encode(given ?? '');
+  final b = utf8.encode(expected);
+  var difference = a.length ^ b.length;
+  for (var i = 0; i < b.length; i++) {
+    difference |= (i < a.length ? a[i] : 0) ^ b[i];
+  }
+  return difference == 0;
+}
+
 class SyncServer {
   SyncServer({
     required this.token,
@@ -72,14 +84,15 @@ class SyncServer {
 
   final String token;
 
-  /// The profile open on the phone (when it has more than one), sent with
-  /// the ping and named when a pairing code does not fit.
+  /// The profile open on the phone, when it has more than one. Never told
+  /// to anyone without the code: a wrong code only hears that the phone
+  /// has profiles.
   final String? profileName;
 
   String get _wrongCode => profileName == null
       ? 'Wrong or missing pairing code.'
-      : 'Wrong pairing code for the profile open on the phone '
-          '($profileName). Open the right profile there, or pair again.';
+      : 'Wrong pairing code for the profile open on the phone. Open the '
+          'right profile there, or pair again.';
   final Future<String> Function(String body) handleSync;
   final SyncCovers? covers;
   HttpServer? _server;
@@ -96,14 +109,16 @@ class SyncServer {
     server.listen((request) => unawaited(_serve(request)));
   }
 
-  Future<void> stop() async {
+  /// Stops listening. With [force] false, a sync already running is
+  /// finished first.
+  Future<void> stop({bool force = true}) async {
     final server = _server;
     _server = null;
-    await server?.close(force: true);
+    await server?.close(force: force);
   }
 
   bool _authorized(HttpRequest request) =>
-      request.headers.value('authorization') == 'Bearer $token';
+      sameSecret(request.headers.value('authorization'), 'Bearer $token');
 
   Future<void> _serve(HttpRequest request) async {
     final response = request.response;
@@ -113,7 +128,6 @@ class SyncServer {
         _json(response, 200, {
           'app': 'chapterly',
           'protocol': syncProtocolVersion,
-          if (profileName != null) 'profile': profileName,
         });
       } else if (request.method == 'POST' && path == '/v1/sync') {
         if (!_authorized(request)) {

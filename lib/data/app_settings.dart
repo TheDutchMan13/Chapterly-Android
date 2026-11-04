@@ -78,6 +78,7 @@ class AppSettings extends ChangeNotifier {
   String? _pinHash;
   String? _pinSalt;
   int _lockAfterSeconds = 30;
+  bool _hideScreen = false;
   DateTime? _lastBackup;
   DateTime? _backupSnoozed;
   DateTime? _reminderSince;
@@ -195,6 +196,10 @@ class AppSettings extends ChangeNotifier {
   /// How long the app can be in the background before it asks for the PIN.
   int get lockAfterSeconds => _lockAfterSeconds;
 
+  /// With the app lock on: Chapterly shows blank in the recent apps and
+  /// can't be captured in a screenshot.
+  bool get hideScreen => _hideScreen;
+
   /// Filters saved under a name, shown at the start of the Library's
   /// filter chips.
   List<SavedFilter> get savedFilters => List.unmodifiable(_savedFilters);
@@ -293,6 +298,7 @@ class AppSettings extends ChangeNotifier {
     settings._pinHash = prefs.getString('pinHash');
     settings._pinSalt = prefs.getString('pinSalt');
     settings._lockAfterSeconds = prefs.getInt('lockAfterSeconds') ?? 30;
+    settings._hideScreen = prefs.getBool('hideScreen') ?? false;
     settings._defaultShelf =
         Shelf.values.asNameMap()[prefs.getString('defaultShelf')];
     settings._defaultFormat =
@@ -803,6 +809,12 @@ class AppSettings extends ChangeNotifier {
   void setLockAfterSeconds(int seconds) {
     _lockAfterSeconds = seconds;
     prefs?.setInt('lockAfterSeconds', seconds);
+    notifyListeners();
+  }
+
+  void setHideScreen(bool on) {
+    _hideScreen = on;
+    prefs?.setBool('hideScreen', on);
     notifyListeners();
   }
 

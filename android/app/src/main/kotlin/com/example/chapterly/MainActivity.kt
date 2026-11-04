@@ -33,7 +33,8 @@ import java.util.concurrent.Executors
  * folder for the reader.
  *
  * The "chapterly/app" channel restarts Chapterly, so it opens with the
- * profile that was just chosen.
+ * profile that was just chosen, and hides it from the recent apps and
+ * screenshots ("secure") when the app lock asks for that.
  *
  * The "chapterly/reader" channel keeps the screen on, sets the brightness
  * and turns the volume buttons into page turns while the reader is open.
@@ -135,7 +136,18 @@ class MainActivity : AudioServiceActivity() {
                     }
                     "release" -> {
                         val uris = call.argument<List<String>>("uris") ?: emptyList()
-                        for (text in uris) release(Uri.parse(text))
+                        val keep = call.argument<List<String>>("keep") ?: emptyList()
+                        // A permission another book (in any profile) still
+                        // reads through is kept.
+                        val persisted =
+                            contentResolver.persistedUriPermissions.map { it.uri }.toSet()
+                        val held = keep.mapNotNull { permissionFor(Uri.parse(it), persisted) }.toSet()
+                        for (text in uris) {
+                            val uri = Uri.parse(text)
+                            val permission = permissionFor(uri, persisted)
+                            if (permission != null && permission in held) continue
+                            release(uri)
+                        }
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -144,6 +156,16 @@ class MainActivity : AudioServiceActivity() {
         setUpHome(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "chapterly/app")
             .setMethodCallHandler { call, result ->
+                if (call.method == "secure") {
+                    // Blank in the recent apps, and no screenshots.
+                    if (call.arguments == true) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
                 if (call.method != "restart") {
                     result.notImplemented()
                     return@setMethodCallHandler
@@ -404,6 +426,25 @@ class MainActivity : AudioServiceActivity() {
         target.parentFile?.mkdirs()
         return input.use { source ->
             target.outputStream().use { output -> source.copyTo(output) }
+        }
+    }
+
+    /**
+     * The kept permission a file is read through: its own, or the one for
+     * the folder it was picked with. Null when there is none.
+     */
+    private fun permissionFor(uri: Uri, held: Set<Uri>): Uri? {
+        if (uri in held) return uri
+        return try {
+            if (DocumentsContract.isDocumentUri(this, uri)) {
+                val treeId = DocumentsContract.getTreeDocumentId(uri)
+                val tree = DocumentsContract.buildTreeDocumentUri(uri.authority, treeId)
+                if (tree in held) tree else null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 

@@ -56,10 +56,25 @@ class PhoneSync extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _stop() async {
+  Future<void> _stop({bool force = true}) async {
     final server = _server;
     _server = null;
-    await server?.stop();
+    await server?.stop(force: force);
+  }
+
+  /// Chapterly left the screen: the phone stops listening for the PC, so
+  /// nothing on the network can reach it while it isn't being used. A sync
+  /// already running is finished first.
+  Future<void> appPaused() async {
+    if (_server == null) return;
+    await _stop(force: false);
+    notifyListeners();
+  }
+
+  /// Chapterly is back on the screen: listening again, if sync is on.
+  Future<void> appResumed() async {
+    if (_server != null || !settings.syncEnabled) return;
+    await refresh();
   }
 
   @override

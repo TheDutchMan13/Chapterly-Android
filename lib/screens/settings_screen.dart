@@ -168,13 +168,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
         ),
+        SwitchListTile(
+          secondary: const Icon(Icons.visibility_off_outlined),
+          title: const Text('Hide in recent apps and screenshots'),
+          subtitle: const Text(
+            'Chapterly shows blank in the list of recent apps, and '
+            'screenshots of it come out black.',
+          ),
+          value: settings.hideScreen,
+          onChanged: settings.setHideScreen,
+        ),
         const ListTile(
           leading: Icon(Icons.info_outline),
           title: Text('If you forget the PIN'),
           subtitle: Text(
             'The only way back in is clearing the app data, which erases '
-            'your library. Keep a backup. PC sync still answers while the '
-            'app is locked. Each profile has its own PIN.',
+            'your library. Keep a backup. PC sync answers while Chapterly '
+            'is open on the screen, locked or not. Each profile has its '
+            'own PIN.',
           ),
         ),
       ],

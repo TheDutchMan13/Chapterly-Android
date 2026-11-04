@@ -13,6 +13,42 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.21.0',
+    date: '2026-11-04',
+    changes: [
+      'App lock: wrong PINs are counted even if you close Chapterly, and '
+          'each round of five makes you wait longer (30 seconds, then a '
+          'minute, up to an hour). Deleting a profile counts the same tries',
+      'New switch with the app lock: hide Chapterly in the recent apps and '
+          'in screenshots',
+      'Sync with a PC: the phone only listens while Chapterly is open on '
+          'the screen, a wrong code no longer hears which profile is open, '
+          'and the code is checked in a way that gives nothing away',
+      'Chapterly is left out of Android cloud backups and phone-to-phone '
+          'transfers, so your library, pairing code and server token stay '
+          'on this phone. Use Settings > Backup to move a library',
+      'Removing a book\'s audio no longer takes away access to files that '
+          'another book, or another profile, still plays',
+      'Undo after a bulk change takes back only what that change did: a '
+          'rating, note or tag you added since is kept, and books the change '
+          'left alone are not touched',
+      'A bulk change that changes nothing on a book leaves it as it was, so '
+          'it is not sent again by the next sync',
+      'Restoring a backup or importing books now sticks: the next sync no '
+          'longer takes the books back to what they were, or removes them '
+          'again',
+      'Syncing with the book server no longer loses a change you make while '
+          'cover pictures are being fetched',
+      'Each profile keeps its automatic backups in a folder named after it '
+          'and its id, so two profiles with names that look alike never '
+          'share one (older backups stay where they were)',
+      'Books from the book server are only saved inside Chapterly\'s '
+          'folder, under a safe name',
+      'CSV export: cells that a spreadsheet would run as a formula are '
+          'saved as text',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.20.0',
     date: '2026-11-03',
     changes: [

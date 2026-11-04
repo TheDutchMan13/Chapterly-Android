@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/app_settings.dart';
+import '../data/pin_lock.dart';
 import '../data/profiles.dart';
 import 'profiles_screen.dart';
 
@@ -27,6 +29,20 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.settings.addListener(_settingsChanged);
+    _applyHidden();
+  }
+
+  static const _app = MethodChannel('chapterly/app');
+  bool? _hidden;
+
+  /// Keeps Android's "secure" window flag in step with the setting.
+  void _applyHidden() {
+    final hide = widget.settings.pinEnabled && widget.settings.hideScreen;
+    if (hide == _hidden) return;
+    _hidden = hide;
+    _app.invokeMethod<void>('secure', hide).catchError((Object _) {
+      // Not on Android (tests): nothing to hide.
+    });
   }
 
   @override
@@ -37,6 +53,7 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
   }
 
   void _settingsChanged() {
+    _applyHidden();
     if (_locked && !widget.settings.pinEnabled) {
       setState(() => _locked = false);
     }
@@ -93,16 +110,37 @@ class _PinScreen extends StatefulWidget {
 }
 
 class _PinScreenState extends State<_PinScreen> {
-  static const _maxTries = 5;
-  static const _waitSeconds = 30;
   static const _maxLength = 8;
 
+  late final _guard = PinGuard(widget.settings.prefs);
   Timer? _timer;
   String _entry = '';
-  int _failures = 0;
   int _waiting = 0;
   String? _error;
   bool _choosingProfile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // A wait from before the app was closed still holds.
+    _startWaiting();
+  }
+
+  void _startWaiting() {
+    final left = _guard.waitLeft();
+    if (left <= Duration.zero) return;
+    _timer?.cancel();
+    _waiting = (left.inMilliseconds / 1000).ceil();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final now = (_guard.waitLeft().inMilliseconds / 1000).ceil();
+      setState(() => _waiting = now);
+      if (now <= 0) timer.cancel();
+    });
+  }
 
   @override
   void dispose() {
@@ -125,28 +163,16 @@ class _PinScreenState extends State<_PinScreen> {
 
   void _check() {
     if (_waiting > 0 || _entry.isEmpty) return;
-    if (widget.settings.checkPin(_entry)) {
+    if (_guard.attempt(_entry, widget.settings.checkPin)) {
       widget.onUnlocked();
       return;
     }
-    _failures++;
-    if (_failures >= _maxTries) {
-      _failures = 0;
-      setState(() {
-        _entry = '';
-        _waiting = _waitSeconds;
-        _error = null;
-      });
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        setState(() => _waiting--);
-        if (_waiting <= 0) timer.cancel();
-      });
-    } else {
-      setState(() {
-        _entry = '';
-        _error = 'Wrong PIN.';
-      });
-    }
+    setState(() {
+      _entry = '';
+      _error = 'Wrong PIN.';
+      _startWaiting();
+      if (_waiting > 0) _error = null;
+    });
   }
 
   Widget _digit(String digit) => SizedBox(

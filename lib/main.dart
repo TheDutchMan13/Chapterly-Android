@@ -64,6 +64,12 @@ Future<void> main() async {
     profileName: profiles.hasOthers ? profile.name : null,
   );
   await phoneSync.refresh();
+  // Only listens for the PC while Chapterly is open on the screen.
+  // The listener stays registered with the app for as long as it runs.
+  AppLifecycleListener(
+    onPause: () => unawaited(phoneSync.appPaused()),
+    onResume: () => unawaited(phoneSync.appResumed()),
+  );
   WidgetsBinding.instance.addObserver(
     AutoBackupObserver(repository: repository, settings: settings),
   );
@@ -266,6 +272,22 @@ Future<void> _setUpListening(
     final library =
         await AudioLibrary.load(File('${dir.path}/audio_library.json'));
     const files = AndroidAudioFiles();
+    AndroidAudioFiles.inUse = () async {
+      final ids = [
+        for (final p in ProfileSwitching.store?.profiles ?? const <Profile>[])
+          p.id,
+      ];
+      if (!ids.contains(_profileId)) ids.add(_profileId);
+      final used = <String>[];
+      for (final id in ids) {
+        final dir = await profileFolder(id);
+        final other = id == _profileId
+            ? library
+            : await AudioLibrary.load(File('${dir.path}/audio_library.json'));
+        used.addAll(other.locations);
+      }
+      return used;
+    };
     final controller = ListenController(
       repository: repository,
       library: library,
