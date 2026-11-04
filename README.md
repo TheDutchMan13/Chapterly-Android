@@ -136,7 +136,8 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   the same library on a PC, synced over your home Wi-Fi (see `docs/SYNC.md`)
 - [Chapterly Server](https://github.com/TheDutchMan13/Chapterly-Server): your
   own book server for EPUB, PDF and audiobooks, with place and library sync
-  over Tailscale (More > Book server)
+  over Tailscale (More > Book server; connect by scanning or pasting the
+  server code it prints)
 
 ## Data and privacy
 No account, no ads, no tracking. The only network traffic is Open Library

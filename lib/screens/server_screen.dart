@@ -6,12 +6,14 @@ import 'package:flutter/services.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/file_io.dart';
+import '../data/server_code.dart';
 import '../ebook/ebook_library.dart' show formatFileSize;
 import '../server/book_server.dart';
 import '../server/server_client.dart';
 import '../server/server_downloads.dart';
 import '../server/server_sync.dart';
 import 'book_detail_screen.dart';
+import 'pair_scan_screen.dart';
 
 // The same screen is in the Windows app.
 
@@ -123,6 +125,46 @@ class _ConnectViewState extends State<_ConnectView> {
     if (text != null && text.isNotEmpty) controller.text = text;
   }
 
+  /// Fills both fields from a server code. The user still taps Connect.
+  void _useCode(({String address, String token}) code) {
+    _address.text = code.address;
+    _token.text = code.token;
+    setState(() => _problem = null);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Code read. Tap Connect.')));
+  }
+
+  Future<void> _scanCode() async {
+    final code = await Navigator.of(context).push<({String address, String token})>(
+      MaterialPageRoute(
+        builder: (_) => CodeScanScreen<({String address, String token})>(
+          parse: parseServerCode,
+          title: 'Scan server code',
+          hint: 'Point the camera at the code shown by the server.',
+          wrongCodeHint: 'That is not a Chapterly server code',
+        ),
+      ),
+    );
+    if (code == null || !mounted) return;
+    _useCode(code);
+  }
+
+  Future<void> _pasteCode() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final code = parseServerCode(data?.text ?? '');
+    if (code == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('That is not a Chapterly server code'),
+        ));
+      return;
+    }
+    _useCode(code);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,6 +176,23 @@ class _ConnectViewState extends State<_ConnectView> {
             'Connect to your own Chapterly book server to browse your '
             'library there, download books into Chapterly and keep your '
             'place in sync with your other devices.',
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _scanCode,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scan server code'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _pasteCode,
+                icon: const Icon(Icons.content_paste),
+                label: const Text('Paste server code'),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           TextField(

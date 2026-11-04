@@ -23,6 +23,7 @@ import 'package:chapterly/server/server_platform.dart';
 import 'package:chapterly/server/server_state.dart';
 import 'package:chapterly/server/server_sync.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'server_fake.dart';
@@ -1210,6 +1211,48 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Dune'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.runAsync(phone.tearDown);
+    });
+
+    testWidgets('pasting a server code fills the address and token',
+        (tester) async {
+      await tester.runAsync(() async {
+        phone = _Phone(server);
+        await phone.setUp();
+        await phone.state.disconnect();
+      });
+      var clipboard = 'chapterly-server:1|100.1.2.3:8780|abc_DEF-123';
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return <String, dynamic>{'text': clipboard};
+        }
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+      await pump(tester);
+      expect(find.text('Scan server code'), findsOneWidget);
+
+      clipboard = 'not a code';
+      await tester.tap(find.text('Paste server code'));
+      await tester.pumpAndSettle();
+      expect(find.text('That is not a Chapterly server code'), findsOneWidget);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Address'))
+          .controller!.text, isEmpty);
+
+      clipboard = 'chapterly-server:1|100.1.2.3:8780|abc_DEF-123';
+      await tester.tap(find.text('Paste server code'));
+      await tester.pumpAndSettle();
+      final address = tester.widget<TextField>(
+          find.widgetWithText(TextField, 'Address'));
+      final token = tester.widget<TextField>(
+          find.widgetWithText(TextField, 'Token'));
+      expect(address.controller!.text, '100.1.2.3:8780');
+      expect(token.controller!.text, 'abc_DEF-123');
+      expect(token.obscureText, isTrue);
+      expect(find.text('Code read. Tap Connect.'), findsOneWidget);
+      expect(phone.state.connected, isFalse);
       await tester.runAsync(phone.tearDown);
     });
 

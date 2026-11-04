@@ -5,14 +5,43 @@ import '../data/pairing_qr.dart';
 
 /// Point the camera at the QR code shown by Chapterly on the PC. Pops with the
 /// pairing code (16 characters) once a valid code has been read.
-class PairScanScreen extends StatefulWidget {
+class PairScanScreen extends StatelessWidget {
   const PairScanScreen({super.key});
 
   @override
-  State<PairScanScreen> createState() => _PairScanScreenState();
+  Widget build(BuildContext context) {
+    return const CodeScanScreen<String>(
+      parse: parsePairingQr,
+      title: 'Scan code from your PC',
+      hint: 'Point the camera at the code shown by Chapterly on your PC.',
+      wrongCodeHint: 'That is not a Chapterly code. Use the code shown by '
+          'Chapterly on your PC.',
+    );
+  }
 }
 
-class _PairScanScreenState extends State<PairScanScreen> {
+/// A camera page that reads QR codes only. [parse] turns the text of a code
+/// into a result, or null if it is not the kind of code wanted; the page pops
+/// with the first result, once.
+class CodeScanScreen<T extends Object> extends StatefulWidget {
+  const CodeScanScreen({
+    super.key,
+    required this.parse,
+    required this.title,
+    required this.hint,
+    required this.wrongCodeHint,
+  });
+
+  final T? Function(String text) parse;
+  final String title;
+  final String hint;
+  final String wrongCodeHint;
+
+  @override
+  State<CodeScanScreen<T>> createState() => _CodeScanScreenState<T>();
+}
+
+class _CodeScanScreenState<T extends Object> extends State<CodeScanScreen<T>> {
   final _controller = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
   );
@@ -27,12 +56,12 @@ class _PairScanScreenState extends State<PairScanScreen> {
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_done) return;
-    String? code;
+    T? code;
     var sawOther = false;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
       if (value == null || value.isEmpty) continue;
-      code = parsePairingQr(value);
+      code = widget.parse(value);
       if (code != null) break;
       sawOther = true;
     }
@@ -49,13 +78,10 @@ class _PairScanScreenState extends State<PairScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = _wrongCode
-        ? 'That is not a Chapterly code. Use the code shown by Chapterly '
-            'on your PC.'
-        : 'Point the camera at the code shown by Chapterly on your PC.';
+    final status = _wrongCode ? widget.wrongCodeHint : widget.hint;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan code from your PC'),
+        title: Text(widget.title),
         actions: [
           IconButton(
             tooltip: 'Toggle flashlight',

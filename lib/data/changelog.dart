@@ -13,6 +13,17 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.24.0',
+    date: '2026-11-04',
+    changes: [
+      'Connect to your book server with one code: on the Book server screen, '
+          'tap "Scan server code" and point the camera at the code the server '
+          'shows, or copy the code and tap "Paste server code". The address '
+          'and token are filled in for you; then tap Connect. Typing them '
+          'still works',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.23.0',
     date: '2026-11-04',
     changes: [
