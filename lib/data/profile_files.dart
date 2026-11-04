@@ -13,7 +13,7 @@ String profileDatabaseName(String id) =>
 
 /// Where a profile keeps its reader and audiobook lists, its book server
 /// connection and its copies of book files: the app's folder for the first
-/// profile, profiles/<id> in it for the others.
+/// profile, `profiles/<id>` in it for the others.
 Future<Directory> profileFolder(String id) async {
   final base = await getApplicationSupportDirectory();
   if (id == mainProfileId) return base;
