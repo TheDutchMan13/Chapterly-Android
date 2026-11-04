@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:chapterly/data/book_repository.dart';
 import 'package:chapterly/data/book_store.dart';
@@ -131,69 +130,6 @@ void main() {
       expect(code, hasLength(16));
       expect(RegExp(r'^[A-HJ-NP-Z2-9]+$').hasMatch(code), isTrue);
       expect(newSyncCode(), isNot(code));
-    });
-  });
-
-  group('the phone server', () {
-    late SyncServer server;
-    late HttpClient client;
-
-    setUp(() async {
-      server = SyncServer(
-        token: 'SECRET',
-        handleSync: (body) async => '{"echo":${jsonEncode(body)}}',
-      );
-      await server.start(port: 0);
-      client = HttpClient();
-    });
-
-    tearDown(() async {
-      client.close(force: true);
-      await server.stop();
-    });
-
-    Future<(int, String)> call(
-      String method,
-      String path, {
-      String? code,
-      String? body,
-    }) async {
-      final request = await client.openUrl(
-        method,
-        Uri.parse('http://127.0.0.1:${server.boundPort}$path'),
-      );
-      if (code != null) request.headers.set('authorization', 'Bearer $code');
-      if (body != null) request.write(body);
-      final response = await request.close();
-      final text = await utf8.decoder.bind(response).join();
-      return (response.statusCode, text);
-    }
-
-    test('ping works without a code', () async {
-      final (status, text) = await call('GET', '/v1/ping');
-      expect(status, 200);
-      expect(text, contains('chapterly'));
-    });
-
-    test('sync refuses a wrong code', () async {
-      final (status, _) = await call(
-        'POST',
-        '/v1/sync',
-        code: 'WRONG',
-        body: '{}',
-      );
-      expect(status, 401);
-    });
-
-    test('sync with the right code gets the reply', () async {
-      final (status, text) = await call(
-        'POST',
-        '/v1/sync',
-        code: 'SECRET',
-        body: 'hello',
-      );
-      expect(status, 200);
-      expect(text, '{"echo":"hello"}');
     });
   });
 

@@ -1,13 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:chapterly/data/book_repository.dart';
 import 'package:chapterly/data/book_store.dart';
 import 'package:chapterly/data/csv.dart';
 import 'package:chapterly/data/pin_lock.dart';
 import 'package:chapterly/data/profile_files.dart';
 import 'package:chapterly/data/profiles.dart';
-import 'package:chapterly/data/sync_server.dart';
 import 'package:chapterly/models/book.dart';
 import 'package:chapterly/models/shelf.dart';
 import 'package:chapterly/server/server_downloads.dart';
@@ -167,44 +163,6 @@ void main() {
       expect(guard().attempt('1234', right), isTrue);
       expect(guard().attempt('0000', right), isFalse);
       expect(guard().waitLeft(), Duration.zero);
-    });
-  });
-
-  group('the phone server', () {
-    test('compares the code whatever its length', () {
-      expect(sameSecret('Bearer ABC', 'Bearer ABC'), isTrue);
-      expect(sameSecret('Bearer AB', 'Bearer ABC'), isFalse);
-      expect(sameSecret('Bearer ABCD', 'Bearer ABC'), isFalse);
-      expect(sameSecret(null, 'Bearer ABC'), isFalse);
-    });
-
-    test('tells no profile name to someone without the code', () async {
-      final server = SyncServer(
-        token: 'SECRET',
-        profileName: 'Anna',
-        handleSync: (body) async => '{}',
-      );
-      await server.start(port: 0);
-      final client = HttpClient();
-      addTearDown(() async {
-        client.close(force: true);
-        await server.stop();
-      });
-      Future<String> call(String method, String path) async {
-        final request = await client.openUrl(
-          method,
-          Uri.parse('http://127.0.0.1:${server.boundPort}$path'),
-        );
-        request.headers.set('authorization', 'Bearer WRONG');
-        final response = await request.close();
-        return utf8.decoder.bind(response).join();
-      }
-
-      expect(await call('GET', '/v1/ping'), isNot(contains('Anna')));
-      final wrong = await call('POST', '/v1/sync');
-      expect(wrong, isNot(contains('Anna')));
-      // The PC still learns it reached a phone with profiles.
-      expect(wrong, contains('profile'));
     });
   });
 }

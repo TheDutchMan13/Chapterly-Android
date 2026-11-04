@@ -38,6 +38,13 @@ class SyncPayload {
 
 const _notSync = FormatException('Not a Chapterly sync message.');
 
+Book _clampBook(Book book, DateTime now) {
+  final updated = clampFutureDate(book.updatedAt, now);
+  return identical(updated, book.updatedAt)
+      ? book
+      : book.copyWith(updatedAt: updated);
+}
+
 Object? _tryJson(String text) {
   try {
     return jsonDecode(text);
@@ -65,9 +72,20 @@ String encodeSyncPayload(
       },
     });
 
+/// How far ahead of this phone's clock a date in a sync message may be.
+/// A later one (a device with its clock far ahead) is read as [DateTime.now],
+/// so it can't win every merge from now on or keep a book deleted forever.
+const maxClockAhead = Duration(days: 1);
+
+/// [date], or [now] when [date] is more than [maxClockAhead] after it.
+DateTime clampFutureDate(DateTime date, DateTime now) =>
+    date.isAfter(now.add(maxClockAhead)) ? now : date;
+
 /// Reads a message made by [encodeSyncPayload]. Throws [FormatException] with
 /// a message for the user if it is not a valid Chapterly sync message.
-SyncPayload decodeSyncPayload(String text) {
+/// Dates more than a day after [now] (default: the clock) are read as [now].
+SyncPayload decodeSyncPayload(String text, {DateTime? now}) {
+  final clock = now ?? DateTime.now();
   final data = _tryJson(text);
   if (data is! Map<String, dynamic> || data['app'] != 'chapterly') {
     throw _notSync;
@@ -86,11 +104,15 @@ SyncPayload decodeSyncPayload(String text) {
   try {
     return SyncPayload(
       books: [
-        for (final item in books) Book.fromJson(item as Map<String, dynamic>),
+        for (final item in books)
+          _clampBook(Book.fromJson(item as Map<String, dynamic>), clock),
       ],
       tombstones: {
         for (final entry in tombstones.entries)
-          entry.key as String: DateTime.parse(entry.value as String),
+          entry.key as String: clampFutureDate(
+            DateTime.parse(entry.value as String),
+            clock,
+          ),
       },
       features: {
         if (features is List)
