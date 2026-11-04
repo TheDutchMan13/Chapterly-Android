@@ -54,23 +54,19 @@ void main() {
       expect(repo.byId(b)!.updatedAt.isBefore(stampB), isFalse);
     });
 
-    test('tags added by Tag my library come off', () async {
+    test('a tag added to many books comes off', () async {
       final a = await addBook('A');
       final before = [repo.byId(a)!];
-      await repo.addTagsToBooks({
-        a: ['Fantasy'],
-      });
+      await repo.addTagToAll({a}, 'Fantasy');
       await repo.putBack(before);
       expect(repo.byId(a)!.tags, isEmpty);
     });
 
-    test('a tag of your own added after Tag my library is not lost',
+    test('a tag added after that is not lost',
         () async {
       final a = await addBook('A');
       final before = [repo.byId(a)!];
-      await repo.addTagsToBooks({
-        a: ['Fantasy'],
-      });
+      await repo.addTagToAll({a}, 'Fantasy');
       await repo.addTagToAll({a}, 'Mine');
       await repo.putBack(before);
       // Tags are one field: changed again since, so they are left as they
@@ -95,7 +91,7 @@ void main() {
     await repo.deleteForever(a);
     expect(repo.snapshot().tombstones, contains(a));
     final restoredAt = DateTime.now();
-    await repo.replaceAll([old]);
+    await repo.restoreBackup([old]);
     expect(repo.snapshot().tombstones, isNot(contains(a)));
     expect(repo.byId(a)!.updatedAt.isBefore(restoredAt), isFalse);
   });
