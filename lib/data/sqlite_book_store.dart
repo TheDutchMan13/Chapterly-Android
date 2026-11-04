@@ -178,7 +178,13 @@ class SqliteBookStore implements BookStore {
       await txn.delete('books');
       final batch = txn.batch();
       for (final book in books) {
-        batch.insert('books', book.toMap());
+        // Two books with one id (a damaged backup) can't stop the restore:
+        // the later one is kept.
+        batch.insert(
+          'books',
+          book.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
       }
       await batch.commit(noResult: true);
     });

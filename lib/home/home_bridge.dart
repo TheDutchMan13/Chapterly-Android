@@ -73,11 +73,22 @@ class HomeBridge {
     if (content.audio && bookId != null) await player.open(bookId);
   }
 
-  WidgetContent _content() => widgetContent(
-        repository.books,
-        playerBookId: controller?.bookId,
-        playing: controller?.playing ?? false,
-      );
+  WidgetContent _content() {
+    final content = widgetContent(
+      repository.books,
+      playerBookId: controller?.bookId,
+      playing: controller?.playing ?? false,
+    );
+    if (!settings.pinEnabled || content.bookId == null) return content;
+    // With the app lock on, the home screen doesn't say which book.
+    return WidgetContent(
+      title: 'Chapterly',
+      detail: content.audio ? 'Audiobook' : 'Book in progress',
+      bookId: content.bookId,
+      audio: content.audio,
+      playing: content.playing,
+    );
+  }
 
   /// Sends what changed. Nothing is sent when nothing changed.
   Future<void> push() async {

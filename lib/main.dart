@@ -225,6 +225,8 @@ Future<void> _setUpBookServer(
 Future<void> _syncAndTell(ServerSync sync) async {
   final text = await BookServer.syncAll();
   if (text == null) return;
+  // It may name a book: not shown over the lock screen, but once unlocked.
+  await LockGate.whenUnlocked();
   final context = Listening.navigatorKey.currentContext;
   if (context == null || !context.mounted) return;
   ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
@@ -312,7 +314,10 @@ Future<void> _setUpListening(
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
     await AudioService.init(
-      builder: () => ChapterlyAudioHandler(controller),
+      builder: () => ChapterlyAudioHandler(
+        controller,
+        hideTitles: () => settings.pinEnabled,
+      ),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.example.chapterly.audio',
         androidNotificationChannelName: 'Audiobook',

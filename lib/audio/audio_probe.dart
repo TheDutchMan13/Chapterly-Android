@@ -3,6 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+/// The largest chapter title sample read from an M4B (they are a few bytes).
+const maxChapterSampleBytes = 64 * 1024;
+
 /// Reads bytes from an audio file: a file on Windows, a content:// address
 /// on Android (through the app's own code), or memory in tests.
 abstract interface class ByteSource {
@@ -314,12 +317,12 @@ Future<List<FoundChapter>> _readTextTrack(
   final chunkOffsets = <int>[];
   if (co64 != null) {
     final count = _u32(data, co64.start + 4);
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < count && co64.start + 16 + i * 8 <= co64.end; i++) {
       chunkOffsets.add(_u64(data, co64.start + 8 + i * 8));
     }
   } else {
     final count = _u32(data, stco!.start + 4);
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < count && stco.start + 12 + i * 4 <= stco.end; i++) {
       chunkOffsets.add(_u32(data, stco.start + 8 + i * 4));
     }
   }
@@ -351,6 +354,9 @@ Future<List<FoundChapter>> _readTextTrack(
   final count = [starts.length, offsets.length, sizes.length]
       .reduce((a, b) => a < b ? a : b);
   for (var i = 0; i < count; i++) {
+    // A chapter title is a few bytes: a huge size is a damaged file, and
+    // reading it could take all the phone's memory.
+    if (sizes[i] <= 0 || sizes[i] > maxChapterSampleBytes) continue;
     final bytes = await source.read(offsets[i], sizes[i]);
     if (bytes.length < 2) continue;
     final length = _u16(bytes, 0);

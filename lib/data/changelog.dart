@@ -13,6 +13,37 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.22.0',
+    date: '2026-11-04',
+    changes: [
+      'Sync with a PC is now sealed with your pairing code: the code never '
+          'goes over the Wi-Fi, nobody else on the network can read or change '
+          'your library on its way, and a sync can\'t be recorded and sent '
+          'again. Update Chapterly on your PC too; you don\'t need to pair '
+          'again',
+      'Sync with a PC: a device with its clock far ahead can no longer win '
+          'every change or keep a book deleted',
+      'Your highlights, bookmarks and audiobook places are saved more '
+          'carefully, so two quick changes can\'t damage the file. If the '
+          'file is ever damaged, it is kept aside instead of written over',
+      'With the app lock on, automatic backups are kept inside Chapterly, '
+          'where other apps and other profiles can\'t open them',
+      'Waiting after too many wrong PINs can\'t be skipped by changing the '
+          'phone\'s clock, and the PIN asked for in Settings counts the same '
+          'tries as the lock screen',
+      'Restoring a backup removes the books that are not in it everywhere, '
+          'so the next sync doesn\'t bring them back. A backup with the same '
+          'book twice restores fine',
+      'With the app lock on, the home-screen widget and the audiobook '
+          'notification don\'t say which book it is, and messages that name '
+          'a book wait until you unlock',
+      'A damaged audiobook file can no longer make Chapterly run out of '
+          'memory while it looks for chapters',
+      'Only the home-screen widget itself can play or pause your audiobook, '
+          'not another app',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.21.0',
     date: '2026-11-04',
     changes: [

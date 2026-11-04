@@ -16,12 +16,37 @@ class LockGate extends StatefulWidget {
   final AppSettings settings;
   final Widget child;
 
+  /// Whether the PIN screen is showing now.
+  static final locked = ValueNotifier<bool>(false);
+
+  /// Completes once the PIN screen is gone (at once when it isn't showing),
+  /// for messages that may name a book.
+  static Future<void> whenUnlocked() {
+    if (!locked.value) return Future.value();
+    final done = Completer<void>();
+    void check() {
+      if (locked.value || done.isCompleted) return;
+      locked.removeListener(check);
+      done.complete();
+    }
+
+    locked.addListener(check);
+    return done.future;
+  }
+
   @override
   State<LockGate> createState() => _LockGateState();
 }
 
 class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
   late bool _locked = widget.settings.pinEnabled;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Known from the first frame, before anything is shown.
+    LockGate.locked.value = _locked;
+  }
   DateTime? _leftAt;
 
   @override
@@ -47,6 +72,7 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    LockGate.locked.value = false;
     widget.settings.removeListener(_settingsChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -77,6 +103,13 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // Told after this frame: listeners may show things.
+    final locked = _locked;
+    if (LockGate.locked.value != locked) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) LockGate.locked.value = _locked;
+      });
+    }
     return Stack(
       children: [
         Visibility(
@@ -86,9 +119,13 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
         ),
         if (_locked)
           Positioned.fill(
-            child: _PinScreen(
-              settings: widget.settings,
-              onUnlocked: () => setState(() => _locked = false),
+            // Its own messenger: messages from the app (which may name a
+            // book) wait in the hidden app until it is unlocked.
+            child: ScaffoldMessenger(
+              child: _PinScreen(
+                settings: widget.settings,
+                onUnlocked: () => setState(() => _locked = false),
+              ),
             ),
           ),
       ],

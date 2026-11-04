@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
+import java.security.MessageDigest
+import java.security.SecureRandom
 
 /**
  * The home-screen widget: the book you are reading or listening to, with a
@@ -24,6 +26,40 @@ class ChapterlyWidget : AppWidgetProvider() {
     companion object {
         const val PREFS = "chapterly_home"
         const val ACTION_TOGGLE = "com.example.chapterly.TOGGLE_PLAY"
+
+        /**
+         * A random word only this app knows (kept in its private
+         * preferences), put in the widget's play/pause button. MainActivity
+         * has to be open to other apps for the launcher, so a play/pause
+         * request without it (from another app) is ignored.
+         */
+        private const val EXTRA_TOKEN = "com.example.chapterly.TOGGLE_TOKEN"
+        private const val TOKEN_KEY = "toggleToken"
+
+        private fun token(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.getString(TOKEN_KEY, null)?.let { return it }
+            val bytes = ByteArray(16)
+            SecureRandom().nextBytes(bytes)
+            val made = bytes.joinToString("") { "%02x".format(it) }
+            prefs.edit().putString(TOKEN_KEY, made).commit()
+            return made
+        }
+
+        /** True for the widget's own play/pause button, and only for it. */
+        fun isToggle(context: Context, intent: Intent?): Boolean {
+            if (intent?.action != ACTION_TOGGLE) return false
+            return try {
+                val given = intent.getStringExtra(EXTRA_TOKEN) ?: return false
+                MessageDigest.isEqual(
+                    given.toByteArray(Charsets.UTF_8),
+                    token(context).toByteArray(Charsets.UTF_8),
+                )
+            } catch (e: Exception) {
+                // Extras another app made unreadable.
+                false
+            }
+        }
 
         fun save(
             context: Context,
@@ -55,6 +91,7 @@ class ChapterlyWidget : AppWidgetProvider() {
             val intent = Intent(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             if (action != null) intent.action = action
+            if (action == ACTION_TOGGLE) intent.putExtra(EXTRA_TOKEN, token(context))
             return PendingIntent.getActivity(
                 context,
                 code,

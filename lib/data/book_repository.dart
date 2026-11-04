@@ -12,6 +12,7 @@ import '../models/reading.dart';
 import '../models/shelf.dart';
 import '../models/wish_priority.dart';
 import 'app_settings.dart';
+import 'backup.dart' show withoutDuplicateIds;
 import 'fuzzy.dart';
 import 'book_sorting.dart';
 import 'book_store.dart';
@@ -1029,31 +1030,61 @@ class BookRepository extends ChangeNotifier {
   /// Restores a backup: replaces the whole library with [books]. They
   /// count as changed now, and a book removed for good since the backup is
   /// no longer marked removed, so the next sync keeps the restored library
-  /// instead of taking it back to what it replaced.
+  /// instead of taking it back to what it replaced. Books that are not in
+  /// the backup are marked removed for good, so a sync doesn't bring them
+  /// back either.
   Future<void> restoreBackup(List<Book> books) {
     final stamp = DateTime.now();
+    final restored = [
+      for (final book in withoutDuplicateIds(books))
+        book.copyWith(updatedAt: stamp),
+    ];
+    final kept = {for (final book in restored) book.id};
     return replaceAll(
-      [for (final book in books) book.copyWith(updatedAt: stamp)],
+      restored,
       forgetRemoved: true,
+      removed: {
+        for (final book in _books)
+          if (!kept.contains(book.id)) book.id: stamp,
+      },
     );
   }
 
-  /// Replaces the whole library with [books] as they are. With
-  /// [forgetRemoved], their ids are no longer marked removed for good.
-  Future<void> replaceAll(List<Book> books, {bool forgetRemoved = false}) async {
-    final sorted = [...books]..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-    _books.clear();
-    _books.addAll(sorted);
-    _isLoaded = true;
-    var forgot = false;
+  /// Replaces the whole library with [books] as they are (one book per id:
+  /// the one changed last). With [forgetRemoved], their ids are no longer
+  /// marked removed for good; the ids in [removed] are marked removed for
+  /// good at the time given. The library on this phone changes only once
+  /// the new one is saved.
+  Future<void> replaceAll(
+    List<Book> books, {
+    bool forgetRemoved = false,
+    Map<String, DateTime> removed = const {},
+  }) async {
+    final sorted = [...withoutDuplicateIds(books)]
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final tombstones = Map.of(_tombstones);
+    var tombstonesChanged = false;
     if (forgetRemoved) {
       for (final book in sorted) {
-        if (_tombstones.remove(book.id) != null) forgot = true;
+        if (tombstones.remove(book.id) != null) tombstonesChanged = true;
       }
     }
-    notifyListeners();
+    for (final entry in removed.entries) {
+      tombstones[entry.key] = entry.value;
+      tombstonesChanged = true;
+    }
     await _store.replaceAll(sorted);
-    if (forgot) await _store.saveTombstones(Map.of(_tombstones));
+    _books
+      ..clear()
+      ..addAll(sorted);
+    if (tombstonesChanged) {
+      _tombstones
+        ..clear()
+        ..addAll(tombstones);
+    }
+    _isLoaded = true;
+    notifyListeners();
+    if (tombstonesChanged) await _store.saveTombstones(Map.of(tombstones));
   }
 
   Future<void> _update(String id, Book Function(Book) change) =>

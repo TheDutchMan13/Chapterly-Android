@@ -205,7 +205,8 @@ class MainActivity : AudioServiceActivity() {
         // The activity's intent is there by now (not yet when it is made).
         // Reopened from recents, the same intent comes back: not a new tap.
         val start = intent
-        if (start?.action == ChapterlyWidget.ACTION_TOGGLE &&
+        if (start != null &&
+            ChapterlyWidget.isToggle(this, start) &&
             start.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
         ) {
             toggleWaiting = true
@@ -278,7 +279,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == ChapterlyWidget.ACTION_TOGGLE) {
+        if (ChapterlyWidget.isToggle(this, intent)) {
             val channel = home
             if (channel != null) channel.invokeMethod("toggle", null) else toggleWaiting = true
         }
@@ -298,6 +299,9 @@ class MainActivity : AudioServiceActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    /** The most one "read" call gives back (64 MB). */
+    private val maxReadBytes = 64 * 1024 * 1024
 
     private val readFlags =
         Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
@@ -353,8 +357,10 @@ class MainActivity : AudioServiceActivity() {
             try {
                 val value = work()
                 main.post { result.success(value) }
-            } catch (e: Exception) {
-                main.post { result.error("audio_files", e.message, null) }
+            } catch (e: Throwable) {
+                // Errors too (such as running out of memory on a damaged
+                // file): the worker lives on and Dart hears about it.
+                main.post { result.error("audio_files", e.message ?: e.toString(), null) }
             }
         }
     }
@@ -410,6 +416,8 @@ class MainActivity : AudioServiceActivity() {
 
     private fun read(uri: Uri, offset: Long, count: Int): ByteArray {
         if (count <= 0) return ByteArray(0)
+        if (count > maxReadBytes) throw IllegalArgumentException("Too much to read at once.")
+        if (offset < 0) throw IllegalArgumentException("No such place in the file.")
         val descriptor = contentResolver.openFileDescriptor(uri, "r")
             ?: throw IllegalStateException("Cannot open the file.")
         return descriptor.use { file ->

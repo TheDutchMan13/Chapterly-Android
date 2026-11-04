@@ -4,6 +4,28 @@ The phone runs a small server while sync is switched on in Settings and the
 app is open. A PC app on the same home Wi-Fi sends its library to the phone,
 and gets back the merged library. Both sides end up with the same books.
 
+## Sealed transport ("sync": 2, Chapterly 1.22.0 and later)
+
+The messages below no longer travel as plain text, and the code is never
+sent. Both apps derive an AES-256-GCM key from the pairing code
+(`lib/data/sync_crypto.dart`, the same file in both apps):
+
+- `GET /v1/ping` (plain, no code) also answers `"sync": 2`.
+- `GET /v2/hello` (plain, no code) answers `{"challenge": "..."}`; valid for
+  5 minutes, usable for every request of one sync.
+- `POST /v2/sync`, `POST /v2/covers/missing`, `GET` and `PUT
+  /v2/covers/<name>` carry `X-Chapterly-Challenge` and a body sealed for
+  `"<METHOD> <path> <challenge>"` (a GET sends a sealed empty body). The
+  answer is sealed for `"response <METHOD> <path> <challenge>"`, also for
+  JSON errors. A cover PUT answers `200` with a sealed empty body.
+- Refused before opening (plain JSON): `401 {"error":"challenge"}` (get a new
+  challenge and retry once), `401 {"error":"code"}`, `401
+  {"error":"replay"}`, `413` too large, `429` after 20 wrong codes in a
+  minute (for a minute).
+- The old `/v1/sync` and `/v1/covers` routes answer `426`: update the PC app.
+
+What follows describes the content of the messages, which is unchanged.
+
 ## Connecting
 
 1. On the phone: Settings > Sync with a PC > switch on "Allow sync from my PC".

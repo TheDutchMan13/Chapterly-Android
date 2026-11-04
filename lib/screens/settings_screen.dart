@@ -277,7 +277,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final confirmed = await _confirm(
           title: 'Restore backup?',
           message: 'This replaces your ${widget.repository.books.length} '
-              'current books with the ${books.length} books in the backup.',
+              'current books with the ${books.length} books in the backup. '
+              'Books that are not in the backup are removed, also from your '
+              'PC and the book server when they next sync.',
           action: 'Restore',
         );
         if (!confirmed || !mounted) return;

@@ -9,11 +9,19 @@ import 'listen_controller.dart';
 /// Shows the audiobook in the notification and on the lock screen, keeps it
 /// playing with the screen off, and lets headphone buttons control it.
 class ChapterlyAudioHandler extends BaseAudioHandler with SeekHandler {
-  ChapterlyAudioHandler(this.controller) {
+  ChapterlyAudioHandler(this.controller, {bool Function()? hideTitles})
+      : _hideTitles = hideTitles ?? _never {
     controller.addListener(_update);
   }
 
   final ListenController controller;
+
+  /// True while the profile has a PIN: the notification and lock screen
+  /// then say only "Audiobook", not which book.
+  final bool Function() _hideTitles;
+  bool? _lastHidden;
+
+  static bool _never() => false;
 
   /// Covers saved as files for the notification, by book id.
   final _art = <String, Uri?>{};
@@ -41,17 +49,27 @@ class ChapterlyAudioHandler extends BaseAudioHandler with SeekHandler {
     final position = controller.trackPosition;
     final now = DateTime.now();
 
+    final hidden = _hideTitles();
     if (mediaItem.value?.id != book.id ||
         chapter != _lastChapter ||
-        controller.track != _lastTrack) {
-      mediaItem.add(MediaItem(
-        id: book.id,
-        title: book.title,
-        artist: book.author.isEmpty ? null : book.author,
-        album: chapter != null ? chapters[chapter].title : null,
-        duration: controller.trackLength,
-        artUri: _artFor(book),
-      ));
+        controller.track != _lastTrack ||
+        hidden != _lastHidden) {
+      _lastHidden = hidden;
+      mediaItem.add(hidden
+          ? MediaItem(
+              id: book.id,
+              title: 'Audiobook',
+              artist: 'Chapterly',
+              duration: controller.trackLength,
+            )
+          : MediaItem(
+              id: book.id,
+              title: book.title,
+              artist: book.author.isEmpty ? null : book.author,
+              album: chapter != null ? chapters[chapter].title : null,
+              duration: controller.trackLength,
+              artUri: _artFor(book),
+            ));
     }
 
     // The notification works out the position itself while playing, so it
@@ -109,7 +127,7 @@ class ChapterlyAudioHandler extends BaseAudioHandler with SeekHandler {
         await file.writeAsBytes(bytes);
         _art[book.id] = file.uri;
         final item = mediaItem.value;
-        if (item != null && item.id == book.id) {
+        if (item != null && item.id == book.id && !_hideTitles()) {
           mediaItem.add(item.copyWith(artUri: file.uri));
         }
       } catch (_) {

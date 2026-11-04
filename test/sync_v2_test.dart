@@ -144,7 +144,10 @@ void main() {
       );
       expect(answer.status, 200);
       // The answer is not readable on the way...
-      expect(answer.text.contains('echo'), isFalse);
+      expect(
+        utf8.decode(answer.bytes, allowMalformed: true).contains('echo'),
+        isFalse,
+      );
       // ...and opens only with the code, for this request.
       expect(
         await open('POST', '/v2/sync', challenge, answer),
