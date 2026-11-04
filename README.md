@@ -97,7 +97,9 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   default. Works while Chapterly is open. Settings shows when the last sync
   happened and what it did. The protocol is in `docs/SYNC.md`
 - Shelves of your own (Beach reads, Gifts...): extra tabs next to the four
-  main shelves; manage them from the menu, or add selected books to one
+  main shelves; manage them from the menu, or add selected books to one.
+  On one of your shelves, select books and use More to move them to another
+  of your shelves or take them off this one (both with Undo)
 - Quotes: save favourite passages from a book, with the page
 - Reading challenge: the yearly goal is a ring with books to go and whether
   you are ahead of or behind pace
