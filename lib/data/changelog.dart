@@ -13,6 +13,22 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.19.0',
+    date: '2026-11-03',
+    changes: [
+      'Profiles: everyone who reads on this phone can have their own '
+          'Chapterly, with their own books, shelves, statistics, goals, '
+          'settings, PC sync, book server connection and PIN (Settings, at '
+          'the top, or More > Profiles). Your library is the first profile, '
+          'called "Me"; rename it any time',
+      'Opening another profile restarts Chapterly with it. A profile with a '
+          'PIN asks for it when it opens, and the PIN screen can open another '
+          'profile',
+      'PC sync: each profile pairs with the PC on its own (Chapterly for '
+          'Windows 1.15.0 or later), and the PC is told which profile is open',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.18.0',
     date: '2026-11-03',
     changes: [

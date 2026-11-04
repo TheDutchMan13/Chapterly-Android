@@ -9,11 +9,17 @@ import 'sync_server.dart';
 /// Runs the sync server while sync is switched on in Settings. Call [refresh]
 /// at start-up and after any change to those settings.
 class PhoneSync extends ChangeNotifier {
-  PhoneSync({required this.repository, required this.settings})
-      : _core = PhoneSyncCore(repository: repository, settings: settings);
+  PhoneSync({
+    required this.repository,
+    required this.settings,
+    this.profileName,
+  }) : _core = PhoneSyncCore(repository: repository, settings: settings);
 
   final BookRepository repository;
   final AppSettings settings;
+
+  /// The open profile, told to the PC so it can say which one it reached.
+  final String? profileName;
   final PhoneSyncCore _core;
   SyncServer? _server;
   String? _error;
@@ -37,6 +43,7 @@ class PhoneSync extends ChangeNotifier {
       token: settings.syncCode!,
       handleSync: _core.handleSync,
       covers: _core,
+      profileName: profileName,
     );
     try {
       await server.start(port: defaultSyncPort);

@@ -55,10 +55,13 @@ class SqliteBookStore implements BookStore {
     )
   ''';
 
-  static Future<SqliteBookStore> open() async {
+  /// Opens a profile's database. The first profile's is chapterly.db.
+  static Future<SqliteBookStore> open({
+    String fileName = 'chapterly.db',
+  }) async {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
-      p.join(dir, 'chapterly.db'),
+      p.join(dir, fileName),
       version: 10,
       onCreate: (db, version) async {
         await db.execute(_createBooksTable);

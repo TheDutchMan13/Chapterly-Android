@@ -32,6 +32,9 @@ import java.util.concurrent.Executors
  * It also picks a book file (EPUB or PDF) and copies it into the app's own
  * folder for the reader.
  *
+ * The "chapterly/app" channel restarts Chapterly, so it opens with the
+ * profile that was just chosen.
+ *
  * The "chapterly/reader" channel keeps the screen on, sets the brightness
  * and turns the volume buttons into page turns while the reader is open.
  */
@@ -139,6 +142,25 @@ class MainActivity : AudioServiceActivity() {
                 }
             }
         setUpHome(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "chapterly/app")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "restart") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val launch = packageManager.getLaunchIntentForPackage(packageName)
+                val component = launch?.component
+                if (component == null) {
+                    result.error("restart", "No launch activity.", null)
+                    return@setMethodCallHandler
+                }
+                result.success(null)
+                // A moment for the reply to reach Dart, then a fresh start.
+                main.postDelayed({
+                    startActivity(Intent.makeRestartActivityTask(component))
+                    Runtime.getRuntime().exit(0)
+                }, 200)
+            }
     }
 
     // ---- The home-screen widget and the reading reminder ----

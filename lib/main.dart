@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'audio/android_audio_files.dart';
 import 'audio/audio_bookmarks.dart';
@@ -18,6 +17,8 @@ import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
+import 'data/profile_files.dart';
+import 'data/profiles.dart';
 import 'data/sqlite_book_store.dart';
 import 'data/sync_three_way.dart';
 import 'data/theme_options.dart';
@@ -34,12 +35,34 @@ import 'server/server_downloads.dart';
 import 'server/server_state.dart';
 import 'server/server_sync.dart';
 
+/// The profile Chapterly opened with. Its files are in [profileFolder].
+String _profileId = mainProfileId;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final repository = BookRepository(await SqliteBookStore.open());
+  // The open profile. Choosing another one restarts Chapterly with it.
+  final profiles = await ProfileStore.load();
+  final profile = profiles.active;
+  _profileId = profile.id;
+  ProfileSwitching.store = profiles;
+  ProfileSwitching.switchRestarts = true;
+  ProfileSwitching.removeFiles = removeProfileFiles;
+  ProfileSwitching.switchTo = (id) async {
+    await profiles.setActive(id);
+    await _beforeRestart();
+    await restartChapterly();
+  };
+  autoBackupSubfolder = profileBackupFolder(profile);
+  final repository = BookRepository(
+    await SqliteBookStore.open(fileName: profileDatabaseName(profile.id)),
+  );
   await repository.load();
-  final settings = await AppSettings.load();
-  final phoneSync = PhoneSync(repository: repository, settings: settings);
+  final settings = await AppSettings.load(profiles.scope(profile.id));
+  final phoneSync = PhoneSync(
+    repository: repository,
+    settings: settings,
+    profileName: profiles.hasOthers ? profile.name : null,
+  );
   await phoneSync.refresh();
   WidgetsBinding.instance.addObserver(
     AutoBackupObserver(repository: repository, settings: settings),
@@ -114,6 +137,21 @@ class ChapterlyApp extends StatelessWidget {
   }
 }
 
+/// Saves your place on the book server and stops the player, before
+/// Chapterly restarts with another profile.
+Future<void> _beforeRestart() async {
+  try {
+    await BookServer.sync?.send().timeout(const Duration(seconds: 3));
+  } catch (_) {
+    // Sent next time this profile opens.
+  }
+  try {
+    await Listening.controller?.close();
+  } catch (_) {
+    // Already stopped.
+  }
+}
+
 /// The book server: browsing it, downloads, and keeping your place in its
 /// books the same on every device. If it fails, the app opens without it.
 Future<void> _setUpBookServer(
@@ -121,7 +159,7 @@ Future<void> _setUpBookServer(
   AppSettings settings,
 ) async {
   try {
-    final dir = await getApplicationSupportDirectory();
+    final dir = await profileFolder(_profileId);
     final state = await ServerState.load(File('${dir.path}/book_server.json'));
     final sync = ServerSync(
       state: state,
@@ -205,7 +243,7 @@ class _BookServerObserver with WidgetsBindingObserver {
 /// still opens without the reader.
 Future<void> _setUpReading(BookRepository repository) async {
   try {
-    final dir = await getApplicationSupportDirectory();
+    final dir = await profileFolder(_profileId);
     EbookReading.library =
         await EbookLibrary.load(File('${dir.path}/ebook_library.json'));
     EbookReading.files = const AndroidEbookFiles();
@@ -224,7 +262,7 @@ Future<void> _setUpListening(
   AppSettings settings,
 ) async {
   try {
-    final dir = await getApplicationSupportDirectory();
+    final dir = await profileFolder(_profileId);
     final library =
         await AudioLibrary.load(File('${dir.path}/audio_library.json'));
     const files = AndroidAudioFiles();

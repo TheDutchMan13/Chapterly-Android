@@ -63,9 +63,23 @@ Future<List<String>> localAddresses() async {
 /// - `POST /v1/covers/missing`, `PUT /v1/covers/<name>` and
 ///   `GET /v1/covers/<name>` (with the code) move the cover pictures.
 class SyncServer {
-  SyncServer({required this.token, required this.handleSync, this.covers});
+  SyncServer({
+    required this.token,
+    required this.handleSync,
+    this.covers,
+    this.profileName,
+  });
 
   final String token;
+
+  /// The profile open on the phone (when it has more than one), sent with
+  /// the ping and named when a pairing code does not fit.
+  final String? profileName;
+
+  String get _wrongCode => profileName == null
+      ? 'Wrong or missing pairing code.'
+      : 'Wrong pairing code for the profile open on the phone '
+          '($profileName). Open the right profile there, or pair again.';
   final Future<String> Function(String body) handleSync;
   final SyncCovers? covers;
   HttpServer? _server;
@@ -99,10 +113,11 @@ class SyncServer {
         _json(response, 200, {
           'app': 'chapterly',
           'protocol': syncProtocolVersion,
+          if (profileName != null) 'profile': profileName,
         });
       } else if (request.method == 'POST' && path == '/v1/sync') {
         if (!_authorized(request)) {
-          _json(response, 401, {'error': 'Wrong or missing pairing code.'});
+          _json(response, 401, {'error': _wrongCode});
         } else {
           final body = await _readBody(request, _maxBodyBytes);
           final reply = await handleSync(body);
@@ -133,7 +148,7 @@ class SyncServer {
     final response = request.response;
     final covers = this.covers!;
     if (!_authorized(request)) {
-      _json(response, 401, {'error': 'Wrong or missing pairing code.'});
+      _json(response, 401, {'error': _wrongCode});
       return;
     }
     final path = request.uri.path;

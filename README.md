@@ -119,13 +119,27 @@ Inspired by the feature set of openreads (GPL-2.0), with its own code.
   out the ones you have
 - App lock: protect Chapterly with a PIN (Settings > Privacy). A forgotten PIN
   can only be cleared by erasing the app data, so keep a backup
+- Profiles: several people on one phone, each with their own books, shelves,
+  statistics, goals, settings, PC sync, book server connection and optional
+  PIN (Settings, at the top; More > Profiles; or the PIN screen). Opening
+  another profile restarts Chapterly with it. The library from before
+  profiles is the first profile and stays where it was. Other profiles keep
+  their database as `chapterly_<id>.db`, their files in `profiles/<id>`, their
+  settings under `p.<id>.` keys and their automatic backups in
+  `Documents/Chapterly/<profile name>`. Only the open profile answers PC sync,
+  with its own pairing code
 
-## Ideas for later
-- Windows app to sync with (the phone side is ready; see docs/SYNC.md)
+## Other Chapterly apps
+- [Chapterly for Windows](https://github.com/TheDutchMan13/Chapterly-Windows):
+  the same library on a PC, synced over your home Wi-Fi (see `docs/SYNC.md`)
+- [Chapterly Server](https://github.com/TheDutchMan13/Chapterly-Server): your
+  own book server for EPUB, PDF and audiobooks, with place and library sync
+  over Tailscale (More > Book server)
 
 ## Data and privacy
 No account, no ads, no tracking. The only network traffic is Open Library
-search requests and cover image downloads. Your library stays on the phone.
+search requests and cover image downloads, plus PC sync and your own book
+server when you switch them on. Your library stays on your own devices.
 
 ## Run it
 

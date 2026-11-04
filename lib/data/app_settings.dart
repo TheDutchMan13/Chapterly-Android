@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'pin_lock.dart';
+import 'profiles.dart';
 import 'quote_of_day.dart';
 import 'saved_filters.dart';
 import 'wish_list.dart';
@@ -49,14 +50,14 @@ DateTime? _fromMillis(int? value) =>
 
 /// How the library is sorted and shown, the app's theme, accent colour and
 /// font, reading goals, and the backup reminder. Saved on the phone with
-/// shared_preferences.
+/// shared_preferences, each profile under its own keys.
 class AppSettings extends ChangeNotifier {
   AppSettings({this.prefs});
 
   /// Brown, the colour Chapterly starts with.
   static const int defaultAccent = 0xFF795548;
 
-  final SharedPreferences? prefs;
+  final ScopedPrefs? prefs;
   SortField _sortField = SortField.dateAdded;
   bool _ascending = false;
   DisplayMode _display = DisplayMode.list;
@@ -257,8 +258,10 @@ class AppSettings extends ChangeNotifier {
     prefs?.setString('reminderShownOn', _reminderShownOn!.toIso8601String());
   }
 
-  static Future<AppSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
+  /// Reads the settings of one profile ([scope]), or of the first profile.
+  static Future<AppSettings> load([ScopedPrefs? scope]) async {
+    final prefs =
+        scope ?? ScopedPrefs(await SharedPreferences.getInstance(), '');
     final settings = AppSettings(prefs: prefs);
     settings._sortField =
         SortField.values.asNameMap()[prefs.getString('sortField')] ??

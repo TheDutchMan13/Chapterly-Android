@@ -12,12 +12,14 @@ import '../data/date_format.dart';
 import '../data/file_io.dart';
 import '../data/kindle_clippings.dart';
 import '../data/phone_sync.dart';
+import '../data/profiles.dart';
 import '../data/sync_server.dart';
 import '../data/theme_options.dart';
 import '../home/home_bridge.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'pin_dialogs.dart';
+import 'profiles_screen.dart';
 import 'reminder_settings.dart';
 import 'shelf_order_screen.dart';
 import 'whats_new_screen.dart';
@@ -135,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return ListTile(
         leading: const Icon(Icons.lock_outline),
         title: const Text('App lock'),
-        subtitle: const Text('Ask for a PIN when Chapterly opens.'),
+        subtitle: const Text('Ask for a PIN when this profile opens.'),
         onTap: _setPin,
       );
     }
@@ -172,7 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: Text(
             'The only way back in is clearing the app data, which erases '
             'your library. Keep a backup. PC sync still answers while the '
-            'app is locked.',
+            'app is locked. Each profile has its own PIN.',
           ),
         ),
       ],
@@ -343,13 +345,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       });
 
+  Widget _profileTile(ProfileStore store) => ListenableBuilder(
+        listenable: store,
+        builder: (context, _) {
+          final active = store.active;
+          return ListTile(
+            leading: ProfileAvatar(profile: active),
+            title: Text(active.name),
+            subtitle: Text(
+              store.hasOthers
+                  ? 'Profile. Open another profile, or add, rename or '
+                      'delete one'
+                  : 'Profile. Add a profile for someone else who reads '
+                      'here',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ProfilesScreen(store: store),
+              ),
+            ),
+          );
+        },
+      );
+
   @override
   Widget build(BuildContext context) {
+    final profiles = ProfileSwitching.store;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           if (_busy) const LinearProgressIndicator(),
+          if (profiles != null) _profileTile(profiles),
           const _SectionHeader('Appearance'),
           ListenableBuilder(
             listenable: widget.settings,

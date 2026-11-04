@@ -4,6 +4,7 @@ import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/file_io.dart';
 import '../data/phone_sync.dart';
+import '../data/profiles.dart';
 import '../models/book.dart';
 import '../server/book_server.dart';
 import 'book_detail_screen.dart';
@@ -12,6 +13,7 @@ import 'library_health_screen.dart';
 import 'manage_shelves_screen.dart';
 import 'next_up_screen.dart';
 import 'notes_search_screen.dart';
+import 'profiles_screen.dart';
 import 'read_next_screen.dart';
 import 'server_screen.dart';
 import 'series_screen.dart';
@@ -225,6 +227,13 @@ class MoreScreen extends StatelessWidget {
             onTap: () => _push(context, TrashScreen(repository: repository)),
           ),
           heading('App'),
+          if (ProfileSwitching.store case final profiles?)
+            ListTile(
+              leading: const Icon(Icons.people_outline),
+              title: const Text('Profiles'),
+              subtitle: Text('Open now: ${profiles.active.name}'),
+              onTap: () => _push(context, ProfilesScreen(store: profiles)),
+            ),
           ListTile(
             leading: const Icon(Icons.settings_outlined),
             title: const Text('Settings'),
