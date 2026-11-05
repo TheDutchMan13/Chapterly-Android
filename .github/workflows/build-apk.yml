@@ -51,6 +51,12 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      # Shows who signed the APK, so you can see the fixed key was used.
+      - name: Show signature
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -i "SHA-256"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
