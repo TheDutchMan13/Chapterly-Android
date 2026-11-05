@@ -856,7 +856,7 @@ class BookDetailScreen extends StatelessWidget {
         final band = Theme.of(context).colorScheme.primaryContainer;
         return Scaffold(
           appBar: AppBar(
-            title: midnight ? null : const Text('Book'),
+            title: const Text('Book'),
             backgroundColor: midnight ? band : null,
             actions: [
               IconButton(

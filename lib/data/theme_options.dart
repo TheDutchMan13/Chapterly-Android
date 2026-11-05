@@ -202,6 +202,21 @@ ThemeData _midnightTheme(AppSettings settings, Brightness brightness) {
         ),
       ),
     ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: Colors.transparent,
+      indicatorColor: scheme.primary,
+      indicatorShape: const StadiumBorder(),
+      selectedIconTheme: IconThemeData(color: scheme.onPrimary),
+      unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
+      selectedLabelTextStyle: text.labelMedium?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: scheme.onSurface,
+      ),
+      unselectedLabelTextStyle: text.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: scheme.onSurfaceVariant,
+      ),
+    ),
     tabBarTheme: TabBarThemeData(
       indicator: ShapeDecoration(
         shape: const StadiumBorder(),
