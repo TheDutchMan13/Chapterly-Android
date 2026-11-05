@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'audio_bookmark.dart';
 import 'audio_progress.dart';
 import 'book_format.dart';
+import 'book_origin.dart';
 import 'quote.dart';
 import 'reading.dart';
 import 'shelf.dart';
@@ -41,6 +42,7 @@ const _knownJsonKeys = {
   'favorite', 'notes', 'deletedAt', 'series', 'seriesNumber', 'readingLog',
   'previousReadings', 'collections', 'quotes', 'currentPage', 'aspectRatings',
   'priority', 'buyAt', 'queuePosition', 'audio', 'audioBookmarks', 'updatedAt',
+  'origin',
 };
 
 /// Fields from a newer Chapterly (phone or PC) that this app does not know.
@@ -111,6 +113,7 @@ class Book {
     this.queuePosition,
     this.audio,
     this.audioBookmarks = const [],
+    this.origin,
     this.extras = const {},
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? addedAt;
@@ -177,6 +180,10 @@ class Book {
   /// Places in the audiobook you saved, with your notes. Synced.
   final List<AudioBookmark> audioBookmarks;
 
+  /// Where the book came from and its details before you changed them.
+  /// Null for a book added before Chapterly kept this. Synced.
+  final BookOrigin? origin;
+
   /// Fields sent by a newer Chapterly that this app does not know yet.
   /// They are saved and sent back unchanged, so a sync never wipes them.
   final Map<String, Object?> extras;
@@ -225,6 +232,7 @@ class Book {
   /// Fields that can be cleared take a function so that `() => null` means
   /// "clear it" while leaving the argument out means "keep it".
   Book copyWith({
+    String? title,
     String? author,
     Shelf? shelf,
     List<String>? tags,
@@ -252,11 +260,12 @@ class Book {
     int? Function()? queuePosition,
     AudioProgress? Function()? audio,
     List<AudioBookmark>? audioBookmarks,
+    BookOrigin? Function()? origin,
     DateTime? updatedAt,
   }) =>
       Book(
         id: id,
-        title: title,
+        title: title ?? this.title,
         author: author ?? this.author,
         shelf: shelf ?? this.shelf,
         addedAt: addedAt,
@@ -289,6 +298,7 @@ class Book {
             queuePosition != null ? queuePosition() : this.queuePosition,
         audio: audio != null ? audio() : this.audio,
         audioBookmarks: audioBookmarks ?? this.audioBookmarks,
+        origin: origin != null ? origin() : this.origin,
         extras: extras,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -331,6 +341,10 @@ class Book {
         'audio_bookmarks': audioBookmarks.isEmpty
             ? null
             : jsonEncode([for (final m in audioBookmarks) m.toJson()]),
+        'origin': switch (origin) {
+          null => null,
+          final BookOrigin value => jsonEncode(value.toJson()),
+        },
         'extras': extras.isEmpty ? null : jsonEncode(extras),
         'updated_at': updatedAt.millisecondsSinceEpoch,
       };
@@ -366,6 +380,7 @@ class Book {
         queuePosition: map['queue_position'] as int?,
         audio: AudioProgress.fromJson(_decode(map['audio'])),
         audioBookmarks: audioBookmarksFromJson(_bookmarksFrom(map)),
+        origin: BookOrigin.fromJson(_decode(map['origin'])),
         extras: _unknownOnly(_objectMap(_decode(map['extras']))),
         updatedAt: _dateFromMillis(map['updated_at']),
       );
@@ -406,6 +421,8 @@ class Book {
         // to an older app.
         if (audioBookmarks.isNotEmpty)
           'audioBookmarks': [for (final m in audioBookmarks) m.toJson()],
+        // Left out when there is none, like the bookmarks.
+        if (origin case final value?) 'origin': value.toJson(),
         'updatedAt': updatedAt.toIso8601String(),
       };
 
@@ -442,6 +459,7 @@ class Book {
         queuePosition: json['queuePosition'] as int?,
         audio: AudioProgress.fromJson(json['audio']),
         audioBookmarks: audioBookmarksFromJson(json['audioBookmarks']),
+        origin: BookOrigin.fromJson(json['origin']),
         extras: _extrasFrom(json),
         updatedAt: _dateFromIso(json['updatedAt']),
       );

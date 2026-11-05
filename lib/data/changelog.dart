@@ -13,6 +13,24 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.26.0',
+    date: '2026-11-05',
+    changes: [
+      'Book info: tap the (i) button next to a book in the list, or on the '
+          'book page, to see its original name (the file name on your book '
+          'server, or the file you added it from), where it came from, and '
+          'the title and author it was first matched as',
+      'Edit a book: correct the title, author, series, ISBN, pages, year '
+          'and cover from the pencil on the book page or "Edit this book" in '
+          'Book info. "Find match" searches Open Library again so you can '
+          'pick the right book when the match was wrong',
+      'A book from your book server can be corrected on the server too, '
+          'for everyone using it. The book file itself is never changed',
+      '"Reset to the matched info" puts back the details the book was '
+          'added with. Your corrections sync to your other devices',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.25.0',
     date: '2026-11-05',
     changes: [
