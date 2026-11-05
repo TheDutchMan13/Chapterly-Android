@@ -187,10 +187,36 @@ class _SeriesScreenState extends State<SeriesScreen> {
                       ),
                       if (next != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Next: #${next.seriesNumber} ${next.title}',
-                            style: textTheme.bodyMedium,
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'NEXT IN SERIES',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                    Text(
+                                      '#${next.seriesNumber} ${next.title}',
+                                      style: textTheme.titleSmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: () => widget.onOpenBook(next),
+                                child: const Text('Open'),
+                              ),
+                            ],
                           ),
                         ),
                     ],

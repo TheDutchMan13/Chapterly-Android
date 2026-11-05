@@ -226,6 +226,10 @@ class AudioLibrary extends ChangeNotifier {
   final _links = <String, AudioLink>{};
   double _speed = 1.0;
 
+  /// The speed chosen for each book, by book id. A book without one plays
+  /// at [speed], the last speed chosen.
+  final _bookSpeeds = <String, double>{};
+
   static Future<AudioLibrary> load(File file) async {
     final library = AudioLibrary(file: file);
     try {
@@ -243,12 +247,22 @@ class AudioLibrary extends ChangeNotifier {
           if (speed is num && speed >= 0.5 && speed <= 3) {
             library._speed = speed.toDouble();
           }
+          final speeds = data['bookSpeeds'];
+          if (speeds is Map) {
+            for (final entry in speeds.entries) {
+              final value = entry.value;
+              if (value is num && value >= 0.5 && value <= 3) {
+                library._bookSpeeds[entry.key.toString()] = value.toDouble();
+              }
+            }
+          }
         }
       }
     } catch (_) {
       // A damaged file only loses the links; the books are untouched. It is
       // kept aside so the next save does not write over it.
       library._links.clear();
+      library._bookSpeeds.clear();
       library._speed = 1.0;
       await setAsideDamaged(file);
     }
@@ -268,6 +282,10 @@ class AudioLibrary extends ChangeNotifier {
       ];
 
   double get speed => _speed;
+
+  /// The speed [bookId] plays at: its own, or the last speed chosen.
+  double speedFor(String? bookId) =>
+      (bookId == null ? null : _bookSpeeds[bookId]) ?? _speed;
 
   Future<void> setLink(String bookId, AudioLink link) async {
     _links[bookId] = link;
@@ -290,8 +308,11 @@ class AudioLibrary extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> setSpeed(double speed) async {
+  /// Sets the speed for [bookId], and as the speed for books that have
+  /// none of their own yet.
+  Future<void> setSpeed(double speed, {String? bookId}) async {
     _speed = speed;
+    if (bookId != null) _bookSpeeds[bookId] = speed;
     notifyListeners();
     await _save();
   }
@@ -305,6 +326,7 @@ class AudioLibrary extends ChangeNotifier {
     try {
       text = jsonEncode({
         'speed': _speed,
+        'bookSpeeds': _bookSpeeds,
         'links': {
           for (final entry in _links.entries) entry.key: entry.value.toJson(),
         },

@@ -172,14 +172,14 @@ void main() {
     for (final entry in [
       'Series',
       'Tags',
-      'Search notes and quotes',
+      'Quotes and notes',
       'Library health',
       'Find duplicates',
     ]) {
       await tester.scrollUntilVisible(find.text(entry), 200);
       await tester.tap(find.text(entry));
       await tester.pumpAndSettle();
-      if (entry == 'Search notes and quotes') {
+      if (entry == 'Quotes and notes') {
         await tester.enterText(find.byType(TextField), 'quote');
         await tester.pump();
       }

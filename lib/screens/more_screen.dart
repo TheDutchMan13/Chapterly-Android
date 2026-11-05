@@ -15,6 +15,7 @@ import 'next_up_screen.dart';
 import 'notes_search_screen.dart';
 import 'profiles_screen.dart';
 import 'read_next_screen.dart';
+import 'review_matches_screen.dart';
 import 'server_screen.dart';
 import 'series_screen.dart';
 import 'settings_screen.dart';
@@ -190,7 +191,7 @@ class MoreScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.manage_search),
-            title: const Text('Search notes and quotes'),
+            title: const Text('Quotes and notes'),
             onTap: () => _push(
               context,
               NotesSearchScreen(
@@ -212,6 +213,13 @@ class MoreScreen extends StatelessWidget {
                 onOpenBook: (book) => _openBook(context, book),
               ),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: const Text('Review matches'),
+            subtitle: const Text('Books that may have the wrong details'),
+            onTap: () =>
+                _push(context, ReviewMatchesScreen(repository: repository)),
           ),
           ListTile(
             leading: const Icon(Icons.content_copy_outlined),

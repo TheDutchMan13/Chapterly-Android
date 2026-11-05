@@ -33,6 +33,7 @@ import 'scan_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'shelf_picker.dart';
+import 'new_books_banner.dart';
 
 enum _AddChoice { search, scan, manual, bookFile, audioFile, audioFolder }
 
@@ -1325,6 +1326,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ),
                         ],
                       ),
+                    if (!_searching && _selected.isEmpty)
+                      NewServerBooksBanner(settings: widget.settings),
                     ?(widget.settings.continueCard &&
                             !_searching &&
                             _selected.isEmpty
