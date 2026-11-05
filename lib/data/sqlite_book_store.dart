@@ -144,10 +144,48 @@ class SqliteBookStore implements BookStore {
     return SqliteBookStore._(db);
   }
 
+  /// Books are read and written a few at a time. A cover picture is kept in
+  /// its book as text of tens of kilobytes, and a library of a thousand books
+  /// read in one go is more than Android lets the app hold at once: Chapterly
+  /// stopped on start.
+  static const _chunk = 10;
+
   @override
   Future<List<Book>> loadAll() async {
-    final rows = await _db.query('books', orderBy: 'added_at DESC');
-    return rows.map(Book.fromMap).toList();
+    final books = <Book>[];
+    var after = 0;
+    while (true) {
+      final rows = await _db.rawQuery(
+        'SELECT rowid AS rid, * FROM books WHERE rowid > ? '
+        'ORDER BY rowid LIMIT ?',
+        [after, _chunk],
+      );
+      if (rows.isEmpty) break;
+      for (final row in rows) {
+        final map = Map<String, Object?>.of(row);
+        after = map.remove('rid') as int;
+        books.add(Book.fromMap(map));
+      }
+    }
+    books.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    return books;
+  }
+
+  /// Writes [books] a few to a batch, so no message to the database is huge.
+  Future<void> _insertAll(DatabaseExecutor db, List<Book> books) async {
+    for (var i = 0; i < books.length; i += _chunk) {
+      final batch = db.batch();
+      for (final book in books.skip(i).take(_chunk)) {
+        // Two books with one id (a damaged backup) can't stop the write: the
+        // later one is kept.
+        batch.insert(
+          'books',
+          book.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    }
   }
 
   @override
@@ -161,32 +199,14 @@ class SqliteBookStore implements BookStore {
 
   @override
   Future<void> saveAll(List<Book> books) async {
-    final batch = _db.batch();
-    for (final book in books) {
-      batch.insert(
-        'books',
-        book.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    await _db.transaction((txn) => _insertAll(txn, books));
   }
 
   @override
   Future<void> replaceAll(List<Book> books) async {
     await _db.transaction((txn) async {
       await txn.delete('books');
-      final batch = txn.batch();
-      for (final book in books) {
-        // Two books with one id (a damaged backup) can't stop the restore:
-        // the later one is kept.
-        batch.insert(
-          'books',
-          book.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      await batch.commit(noResult: true);
+      await _insertAll(txn, books);
     });
   }
 

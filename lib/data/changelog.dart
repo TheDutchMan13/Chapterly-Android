@@ -13,6 +13,15 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.24.2',
+    date: '2026-11-04',
+    changes: [
+      'Fixed Chapterly stopping on start in a big library: the books are '
+          'now read from and saved to the phone a few at a time, instead of '
+          'all at once (the cover pictures are large)',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.24.1',
     date: '2026-11-04',
     changes: [
