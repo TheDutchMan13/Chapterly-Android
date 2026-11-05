@@ -61,7 +61,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _bar(NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
@@ -80,7 +80,33 @@ class _HomeShellState extends State<HomeShell> {
             label: 'More',
           ),
         ],
-      ),
+      )),
+    );
+  }
+
+  /// In the Midnight look the bar floats as a rounded pill above the
+  /// bottom of the screen.
+  Widget _bar(Widget bar) {
+    return ListenableBuilder(
+      listenable: widget.settings,
+      builder: (context, _) {
+        if (widget.settings.look != AppLook.midnight) return bar;
+        return SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(33),
+              child: MediaQuery.removePadding(
+                context: context,
+                removeBottom: true,
+                child: bar,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

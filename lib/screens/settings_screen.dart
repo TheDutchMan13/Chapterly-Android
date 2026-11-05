@@ -399,6 +399,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: SegmentedButton<AppLook>(
+                    segments: const [
+                      ButtonSegment(
+                        value: AppLook.midnight,
+                        label: Text('Midnight'),
+                      ),
+                      ButtonSegment(
+                        value: AppLook.classic,
+                        label: Text('Classic'),
+                      ),
+                    ],
+                    selected: {widget.settings.look},
+                    onSelectionChanged: (choice) =>
+                        widget.settings.setLook(choice.first),
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SegmentedButton<ThemeMode>(
                     segments: const [
@@ -422,13 +440,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 SwitchListTile(
                   title: const Text('Pure black in dark mode'),
-                  subtitle: const Text(
-                    'True black instead of dark grey. Can save battery on '
-                    'OLED screens.',
+                  subtitle: Text(
+                    widget.settings.look == AppLook.midnight
+                        ? 'True black instead of navy. Can save battery on '
+                            'OLED screens.'
+                        : 'True black instead of dark grey. Can save battery '
+                            'on OLED screens.',
                   ),
                   value: widget.settings.pureBlack,
                   onChanged: widget.settings.setPureBlack,
                 ),
+                if (widget.settings.look == AppLook.classic)
                 SwitchListTile(
                   title: const Text('Paper look in light mode'),
                   subtitle: const Text(
@@ -437,6 +459,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: widget.settings.paperLight,
                   onChanged: widget.settings.setPaperLight,
                 ),
+                SwitchListTile(
+                  title: const Text('Continue reading card'),
+                  subtitle: const Text(
+                    'The book you are reading, at the top of the library.',
+                  ),
+                  value: widget.settings.continueCard,
+                  onChanged: widget.settings.setContinueCard,
+                ),
+                if (widget.settings.look == AppLook.classic) ...[
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -465,6 +496,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+                ],
                 const SizedBox(height: 8),
                 RadioGroup<String>(
                   groupValue: widget.settings.fontFamily ?? '',

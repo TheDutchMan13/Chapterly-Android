@@ -815,7 +815,7 @@ class BookDetailScreen extends StatelessWidget {
                 ),
                 if (reading && progress != null) ...[
                   const SizedBox(height: 10),
-                  LinearProgressIndicator(value: progress),
+                  LinearProgressIndicator(value: progress, minHeight: 6),
                   const SizedBox(height: 4),
                   Text(
                     _progressText(book),
@@ -823,7 +823,7 @@ class BookDetailScreen extends StatelessWidget {
                   ),
                 ] else if (reading && listened != null) ...[
                   const SizedBox(height: 10),
-                  LinearProgressIndicator(value: listened),
+                  LinearProgressIndicator(value: listened, minHeight: 6),
                   const SizedBox(height: 4),
                   Text(
                     'Listened ${(listened * 100).round()}%',
@@ -852,9 +852,12 @@ class BookDetailScreen extends StatelessWidget {
             book.readingLog.fold<int>(0, (sum, entry) => sum + entry.minutes);
         final author = book.author;
         final pace = readingPace(book);
+        final midnight = settings.look == AppLook.midnight;
+        final band = Theme.of(context).colorScheme.primaryContainer;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Book'),
+            title: midnight ? null : const Text('Book'),
+            backgroundColor: midnight ? band : null,
             actions: [
               IconButton(
                 tooltip: 'Share a book card',
@@ -884,13 +887,29 @@ class BookDetailScreen extends StatelessWidget {
             initialIndex: book.shelf == Shelf.inProgress ? 1 : 0,
             child: Column(
               children: [
-                _header(
-                  context,
-                  book,
-                  cover: BookCover(
-                    coverUrl: book.coverUrl,
-                    width: 88,
-                    height: 132,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: midnight
+                        ? LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              band,
+                              Theme.of(context).colorScheme.surface,
+                            ],
+                          )
+                        : null,
+                  ),
+                  child: _header(
+                    context,
+                    book,
+                    cover: BookCover(
+                      coverUrl: book.coverUrl,
+                      title: book.title,
+                      width: midnight ? 100 : 88,
+                      height: midnight ? 150 : 132,
+                      shadow: midnight,
+                    ),
                   ),
                 ),
                 TabBar(
