@@ -13,6 +13,7 @@ import 'audio/listen_controller.dart';
 import 'audio/listening.dart';
 import 'data/app_settings.dart';
 import 'data/auto_backup.dart';
+import 'data/auto_series.dart';
 import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/open_library_client.dart';
@@ -85,6 +86,8 @@ Future<void> main() async {
   );
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
+  // Fills in series found in titles, now and as books are added.
+  AutoSeries.start(repository, settings);
   // Audiobook bookmarks live with the books, so they sync with the PC.
   AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);
