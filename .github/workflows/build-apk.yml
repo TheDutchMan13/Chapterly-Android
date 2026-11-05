@@ -35,6 +35,19 @@ jobs:
       - name: Test
         run: flutter test
 
+      # The signing key lives in repository secrets, never in the code. Without
+      # it (a pull request from a fork) the build is signed with debug keys.
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+            printf 'storeFile=release.keystore\nstorePassword=%s\nkeyAlias=chapterly\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > android/key.properties
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
