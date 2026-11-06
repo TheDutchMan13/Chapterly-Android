@@ -1,5 +1,6 @@
 import '../models/book.dart';
 import 'fuzzy.dart';
+import 'series.dart' show seriesMergeKey;
 
 // The same code is in the Windows app; keep the two copies alike.
 
@@ -109,10 +110,10 @@ List<SeriesGuess> detectSeries(List<Book> books) {
   final known = <String, String>{
     for (final book in live)
       if ((book.series ?? '').trim().isNotEmpty)
-        foldText(book.series!): book.series!.trim(),
+        seriesMergeKey(book.series!): book.series!.trim(),
   };
   String spelling(String name) {
-    final key = foldText(name);
+    final key = seriesMergeKey(name);
     final exact = known[key];
     if (exact != null) return exact;
     for (final entry in known.entries) {
@@ -141,7 +142,7 @@ List<SeriesGuess> detectSeries(List<Book> books) {
       final name = _tidy(match.group(1)!);
       final number = int.parse(match.group(2)!);
       if (name.length >= 3 && number > 0) {
-        bare.putIfAbsent(foldText(name), () => []).add((book, number, name));
+        bare.putIfAbsent(seriesMergeKey(name), () => []).add((book, number, name));
       }
     }
   }
