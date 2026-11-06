@@ -16,6 +16,7 @@ import 'data/auto_backup.dart';
 import 'data/auto_series.dart';
 import 'data/book_repository.dart';
 import 'data/file_io.dart';
+import 'data/google_books_fill.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
 import 'data/pin_lock.dart';
@@ -88,6 +89,8 @@ Future<void> main() async {
   runAutoBackup(repository, settings);
   // Fills in series found in titles, now and as books are added.
   AutoSeries.start(repository, settings);
+  // Google Books fills in missing covers, pages and tags (off until switched on).
+  GoogleBooksFill.start(repository, settings);
   // Audiobook bookmarks live with the books, so they sync with the PC.
   AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);

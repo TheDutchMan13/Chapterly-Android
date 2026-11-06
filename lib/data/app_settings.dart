@@ -72,6 +72,10 @@ class AppSettings extends ChangeNotifier {
   AppLook _look = AppLook.midnight;
   bool _continueCard = true;
   bool _autoSeries = true;
+  bool _useGoogleBooks = false;
+  String? _googleBooksKey;
+  String? _googleBooksPausedOn;
+  final _googleBooksAsked = <String>{};
   final _autoSeriesApplied = <String>{};
   String? _serverSeenAt;
   bool _pureBlack = false;
@@ -146,6 +150,20 @@ class AppSettings extends ChangeNotifier {
   /// Whether books get their series from their title by themselves (see
   /// auto_series.dart).
   bool get autoSeries => _autoSeries;
+
+  /// Whether Google Books is asked for what books are missing (cover, pages,
+  /// ISBN, year, tags). Off by default: it sends titles and authors out.
+  bool get useGoogleBooks => _useGoogleBooks;
+
+  /// A free Google Books API key, or null to ask without one (which allows
+  /// only a few requests a day).
+  String? get googleBooksKey => _googleBooksKey;
+
+  /// The day (year-month-day) Google said there were no more requests.
+  String? get googleBooksPausedOn => _googleBooksPausedOn;
+
+  /// Books Google Books was already asked about, so each is asked only once.
+  Set<String> get googleBooksAsked => Set.unmodifiable(_googleBooksAsked);
 
   /// Books that were given a series that way, so one you clear stays clear.
   Set<String> get autoSeriesApplied => Set.unmodifiable(_autoSeriesApplied);
@@ -317,6 +335,11 @@ class AppSettings extends ChangeNotifier {
         AppLook.midnight;
     settings._continueCard = prefs.getBool('continueCard') ?? true;
     settings._autoSeries = prefs.getBool('autoSeries') ?? true;
+    settings._useGoogleBooks = prefs.getBool('useGoogleBooks') ?? false;
+    settings._googleBooksKey = prefs.getString('googleBooksKey');
+    settings._googleBooksPausedOn = prefs.getString('googleBooksPausedOn');
+    settings._googleBooksAsked
+        .addAll(prefs.getStringList('googleBooksAsked') ?? const []);
     settings._autoSeriesApplied
         .addAll(prefs.getStringList('autoSeriesApplied') ?? const []);
     settings._serverSeenAt = prefs.getString('serverSeenAt');
@@ -742,6 +765,36 @@ class AppSettings extends ChangeNotifier {
     _serverSeenAt = value.toUtc().toIso8601String();
     prefs?.setString('serverSeenAt', _serverSeenAt!);
     notifyListeners();
+  }
+
+  void setUseGoogleBooks(bool value) {
+    _useGoogleBooks = value;
+    prefs?.setBool('useGoogleBooks', value);
+    notifyListeners();
+  }
+
+  void setGoogleBooksKey(String? value) {
+    final key = value?.trim();
+    _googleBooksKey = key == null || key.isEmpty ? null : key;
+    if (_googleBooksKey == null) {
+      prefs?.remove('googleBooksKey');
+    } else {
+      prefs?.setString('googleBooksKey', _googleBooksKey!);
+      // A new key has its own requests: try again now.
+      _googleBooksPausedOn = null;
+      prefs?.remove('googleBooksPausedOn');
+    }
+    notifyListeners();
+  }
+
+  void setGoogleBooksPausedOn(String day) {
+    _googleBooksPausedOn = day;
+    prefs?.setString('googleBooksPausedOn', day);
+  }
+
+  void addGoogleBooksAsked(Iterable<String> ids) {
+    _googleBooksAsked.addAll(ids);
+    prefs?.setStringList('googleBooksAsked', _googleBooksAsked.toList());
   }
 
   void setAutoSeries(bool value) {
