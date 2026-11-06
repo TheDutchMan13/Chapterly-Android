@@ -30,6 +30,7 @@ import 'continue_card.dart';
 import 'cover_size_dialog.dart';
 import 'library_health_screen.dart';
 import 'scan_screen.dart';
+import '../widgets/lookup_source_toggle.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'shelf_picker.dart';
@@ -921,6 +922,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  /// Opens the online search with what is typed in the search box.
+  Future<void> _searchOnline(LookupSource source) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SearchScreen(
+          repository: widget.repository,
+          client: widget.client,
+          settings: widget.settings,
+          initialQuery: _searchController.text.trim(),
+          initialSource: source,
+        ),
+      ),
+    );
+  }
+
   Future<void> _addBook() async {
     final choice = await showModalBottomSheet<_AddChoice>(
       context: context,
@@ -1396,6 +1412,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ),
                       ],
                     ),
+                    if (_searching && _searchController.text.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text('Not in your library?'),
+                              for (final source in LookupSource.values)
+                                ActionChip(
+                                  avatar: const Icon(
+                                    Icons.travel_explore,
+                                    size: 18,
+                                  ),
+                                  label: Text('Search ${source.label}'),
+                                  onPressed: () => _searchOnline(source),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: TabBarView(
                         children: [
