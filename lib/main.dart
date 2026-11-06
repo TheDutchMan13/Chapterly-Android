@@ -18,6 +18,7 @@ import 'data/book_repository.dart';
 import 'data/file_io.dart';
 import 'data/google_books_client.dart';
 import 'data/google_books_fill.dart';
+import 'data/hardcover_client.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
 import 'data/pin_lock.dart';
@@ -92,6 +93,7 @@ Future<void> main() async {
   AutoSeries.start(repository, settings);
   // Google Books fills in missing covers, pages and tags (off until switched on).
   sharedGoogleBooks = GoogleBooksClient(apiKey: () => settings.googleBooksKey);
+  sharedHardcover = HardcoverClient(token: () => settings.hardcoverToken);
   GoogleBooksFill.start(repository, settings);
   // Audiobook bookmarks live with the books, so they sync with the PC.
   AudioBookmarking.repository = repository;

@@ -11,6 +11,7 @@ import '../server/book_server.dart';
 import 'book_detail_screen.dart';
 import 'duplicates_screen.dart';
 import 'find_isbns_screen.dart';
+import 'fix_library_screen.dart';
 import 'library_health_screen.dart';
 import 'manage_shelves_screen.dart';
 import 'next_up_screen.dart';
@@ -227,6 +228,18 @@ class MoreScreen extends StatelessWidget {
             subtitle: const Text('Books that may have the wrong details'),
             onTap: () =>
                 _push(context, ReviewMatchesScreen(repository: repository)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high_outlined),
+            title: const Text('Fix library'),
+            subtitle: const Text('Series, ISBNs and covers in one go'),
+            onTap: () => _push(
+              context,
+              FixLibraryScreen(
+                repository: repository,
+                client: client ?? OpenLibraryClient(),
+              ),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.pin_outlined),
