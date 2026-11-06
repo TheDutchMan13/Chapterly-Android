@@ -634,6 +634,7 @@ class BookDetailScreen extends StatelessWidget {
           client: OpenLibraryClient(),
           author: author,
           settings: settings,
+          fileIo: fileIo,
         ),
       ),
     );
@@ -1158,7 +1159,7 @@ class BookDetailScreen extends StatelessWidget {
                               style: TextButton.styleFrom(padding: EdgeInsets.zero),
                               onPressed: () => _openAuthorBooks(context, author),
                               icon: const Icon(Icons.travel_explore),
-                              label: const Text('More by this author online'),
+                              label: const Text('About this author'),
                             ),
                           ),
                         Align(
