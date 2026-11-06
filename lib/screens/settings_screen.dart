@@ -23,6 +23,7 @@ import 'pair_scan_screen.dart';
 import 'pin_dialogs.dart';
 import 'profiles_screen.dart';
 import 'reminder_settings.dart';
+import 'settings_search.dart';
 import 'shelf_order_screen.dart';
 import 'whats_new_screen.dart';
 
@@ -46,6 +47,14 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _search = SettingsSearch();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   Future<void> _editDefaultTags() async {
     final controller = TextEditingController(
       text: widget.settings.defaultTags.join(', '),
@@ -558,11 +567,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final profiles = ProfileSwitching.store;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+      body: SettingsSearchScope(
+        search: _search,
+        child: ListView(
+        // Build every section, so the search can read the ones off screen.
+        cacheExtent: 100000,
         children: [
+          SettingsSearchField(search: _search),
+          const SettingsNoMatch(),
           if (_busy) const LinearProgressIndicator(),
           if (profiles != null) _profileTile(profiles),
-          const _SectionHeader('Appearance'),
+          SettingsSearchable(
+            title: 'Appearance',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Appearance'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) => Column(
@@ -689,7 +709,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const _SectionHeader('Adding books'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Adding books',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Adding books'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) => Column(
@@ -780,7 +808,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const _SectionHeader('Library'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Library',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Library'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) => Column(
@@ -844,7 +880,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const _SectionHeader('Backup'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Backup',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Backup'),
           ListTile(
             leading: const Icon(Icons.upload_file),
             title: const Text('Export backup'),
@@ -862,7 +906,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: _restoreBackup,
           ),
-          const _SectionHeader('Automatic backups'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Automatic backups',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Automatic backups'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) => Column(
@@ -911,7 +963,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const _SectionHeader('Backup reminder'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Backup reminder',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Backup reminder'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) {
@@ -948,12 +1008,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
-          const _SectionHeader('Privacy'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Privacy',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Privacy'),
           ListenableBuilder(
             listenable: widget.settings,
             builder: (context, _) => _lockSettings(),
           ),
-          const _SectionHeader('Sync with a PC'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Sync with a PC',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Sync with a PC'),
           ListenableBuilder(
             listenable: Listenable.merge([widget.settings, widget.phoneSync]),
             builder: (context, _) => _SyncSettings(
@@ -961,7 +1037,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               phoneSync: widget.phoneSync,
             ),
           ),
-          const _SectionHeader('Spreadsheet (CSV)'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Spreadsheet (CSV)',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Spreadsheet (CSV)'),
           ListTile(
             leading: const Icon(Icons.table_chart_outlined),
             title: const Text('Export as CSV'),
@@ -987,7 +1071,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: _importCsv,
           ),
-          const _SectionHeader('Kindle'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'Kindle',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('Kindle'),
           ListTile(
             leading: const Icon(Icons.format_quote_outlined),
             title: const Text('Import Kindle highlights'),
@@ -998,7 +1090,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: _importKindle,
           ),
-          const _SectionHeader('About'),
+              ],
+            ),
+          ),
+          SettingsSearchable(
+            title: 'About',
+            builder: (context, searching) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SectionHeader('About'),
           const ListTile(
             leading: Icon(Icons.lock_outline),
             title: Text('Your library stays on this phone'),
@@ -1030,7 +1130,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text(licenceName),
             onTap: _openLicence,
           ),
+              ],
+            ),
+          ),
         ],
+        ),
       ),
     );
   }
