@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_settings.dart';
 import '../data/book_repository.dart';
 import '../data/file_io.dart';
+import '../data/open_library_client.dart';
 import '../data/phone_sync.dart';
 import '../data/profiles.dart';
 import '../models/book.dart';
@@ -21,6 +22,7 @@ import 'series_screen.dart';
 import 'settings_screen.dart';
 import 'tags_screen.dart';
 import 'trash_screen.dart';
+import 'update_covers_screen.dart';
 import 'wish_list_screen.dart';
 import 'whats_new_screen.dart';
 
@@ -46,7 +48,11 @@ class MoreScreen extends StatelessWidget {
     required this.settings,
     required this.phoneSync,
     required this.fileIo,
+    this.client,
   });
+
+  /// Open Library, for updating covers. A new one is made when null.
+  final OpenLibraryClient? client;
 
   final BookRepository repository;
   final AppSettings settings;
@@ -220,6 +226,18 @@ class MoreScreen extends StatelessWidget {
             subtitle: const Text('Books that may have the wrong details'),
             onTap: () =>
                 _push(context, ReviewMatchesScreen(repository: repository)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.image_search_outlined),
+            title: const Text('Update covers'),
+            subtitle: const Text('Missing or broken Open Library covers'),
+            onTap: () => _push(
+              context,
+              UpdateCoversScreen(
+                repository: repository,
+                client: client ?? OpenLibraryClient(),
+              ),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.content_copy_outlined),

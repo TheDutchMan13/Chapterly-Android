@@ -58,6 +58,7 @@ class _HomeShellState extends State<HomeShell> {
             settings: widget.settings,
             phoneSync: widget.phoneSync,
             fileIo: widget.fileIo,
+            client: widget.client,
           ),
         ],
       ),
