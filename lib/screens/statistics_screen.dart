@@ -12,6 +12,7 @@ import '../models/book.dart';
 import '../models/book_format.dart';
 import '../models/shelf.dart';
 import 'book_insights.dart';
+import 'challenges_card.dart';
 import 'reader_stats_card.dart';
 import 'stats_widgets.dart';
 import 'year_review_screen.dart';
@@ -645,6 +646,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ],
               ),
               if (year == null) ReaderStatsCard(repository: widget.repository),
+              const SizedBox(height: 24),
+              ChallengesCard(
+                settings: widget.settings,
+                books: widget.repository.books,
+                tags: widget.repository.allTags,
+              ),
               if (year != null) ...[
                 const SizedBox(height: 24),
                 _goalCard(year, stats),

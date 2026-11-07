@@ -6,6 +6,7 @@ import '../data/series.dart';
 import '../data/series_detect.dart';
 import '../models/book.dart';
 import '../models/shelf.dart';
+import 'series_check_screen.dart';
 
 // The same screen is in the Windows app.
 
@@ -27,6 +28,23 @@ class SeriesScreen extends StatefulWidget {
 
 class _SeriesScreenState extends State<SeriesScreen> {
   bool _hideComplete = false;
+
+  /// Asks Hardcover about every series, newest gaps first.
+  void _checkAll() {
+    final all = seriesOverview(widget.repository.allBooks);
+    if (all.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('You have no series yet.'),
+      ));
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SeriesCheckScreen(
+        repository: widget.repository,
+        series: all,
+      ),
+    ));
+  }
 
   Future<void> _addMissing(SeriesInfo series, int number) async {
     final title = '${series.name} #$number';
@@ -231,6 +249,11 @@ class _SeriesScreenState extends State<SeriesScreen> {
           PopupMenuButton<void>(
             tooltip: 'More',
             itemBuilder: (_) => [
+              if (hardcoverClient.hasToken)
+                PopupMenuItem<void>(
+                  onTap: _checkAll,
+                  child: const Text('Check every series on Hardcover'),
+                ),
               CheckedPopupMenuItem(
                 checked: _hideComplete,
                 onTap: () => setState(() => _hideComplete = !_hideComplete),
