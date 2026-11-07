@@ -131,7 +131,10 @@ Future<void> runAutoBackup(
   try {
     final locked = settings.pinEnabled;
     final path = await writeAutoBackup(
-      content: encodeBackup(repository.allBooks, now: time),
+      content: encodeBackup(
+        await repository.withPictures(repository.allBooks),
+        now: time,
+      ),
       // A PIN-locked profile's backups stay where only Chapterly, open on
       // that profile, can read them: a shared folder could be restored from
       // another profile, or read by any app.

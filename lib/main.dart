@@ -40,6 +40,7 @@ import 'server/library_sync.dart';
 import 'server/server_downloads.dart';
 import 'server/server_state.dart';
 import 'server/server_sync.dart';
+import 'data/cover_store.dart';
 
 /// The profile Chapterly opened with. Its files are in [profileFolder].
 String _profileId = mainProfileId;
@@ -72,6 +73,8 @@ Future<void> main() async {
     await SqliteBookStore.open(fileName: profileDatabaseName(profile.id)),
   );
   await repository.load();
+  // Cover pictures are read from this library when they are shown.
+  CoverImages.source = repository.readCover;
   final settings = await AppSettings.load(profiles.scope(profile.id));
   final phoneSync = PhoneSync(
     repository: repository,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/cover_store.dart';
 import '../models/book.dart';
 import 'listen_controller.dart';
 
@@ -116,12 +117,13 @@ class ChapterlyAudioHandler extends BaseAudioHandler with SeekHandler {
     final url = book.coverUrl;
     if (url == null) return null;
     if (url.startsWith('http')) return Uri.tryParse(url);
-    if (!url.startsWith('data:image/')) return null;
+    if (!isOwnCover(url)) return null;
     if (_art.containsKey(book.id)) return _art[book.id];
     _art[book.id] = null;
     () async {
       try {
-        final bytes = UriData.parse(url).contentAsBytes();
+        final bytes = await ownCoverBytes(url);
+        if (bytes == null) return;
         final dir = await getTemporaryDirectory();
         final file = File('${dir.path}/cover_${book.id.hashCode}.jpg');
         await file.writeAsBytes(bytes);
