@@ -6,11 +6,15 @@ import 'dart:math';
 
 import 'sync_covers.dart';
 import 'sync_crypto.dart';
+import 'sync_profiles.dart';
 import 'sync_protocol.dart';
 
 /// The largest sync message the phone will read. Thousands of books fit
 /// easily: covers are not in it, they have their own requests.
 const _maxBodyBytes = 50 * 1024 * 1024;
+
+/// The largest list of profiles to add.
+const _maxProfilesBytes = 64 * 1024;
 
 /// The largest cover picture, and the largest list of cover names.
 const _maxCoverBytes = 2 * 1024 * 1024;
@@ -45,6 +49,29 @@ abstract interface class SyncCovers {
 
   /// The picture named [hash], or null.
   Future<String?> get(String hash);
+}
+
+/// One profile's sync on the phone: its library and its covers.
+abstract interface class SyncEndpoint implements SyncCovers {
+  /// Merges the PC's library ([body]) and returns the merged one.
+  Future<String> handleSync(String body);
+}
+
+/// A profile that has a PIN and isn't open on the phone.
+class ProfileLocked implements Exception {
+  const ProfileLocked();
+}
+
+/// Every profile on the phone, for a PC that syncs them all with one
+/// pairing.
+abstract interface class SyncProfileHost {
+  /// Adds the profiles the PC asks for ([body], see encodeProfileRequest)
+  /// and returns the list of profiles (see encodeProfileList).
+  Future<String> profiles(String body);
+
+  /// The sync of profile [id], or null when there is no such profile.
+  /// Throws [ProfileLocked] for a profile that has a PIN and isn't open.
+  Future<SyncEndpoint?> endpoint(String id);
 }
 
 const _codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -101,11 +128,16 @@ class _Refused implements Exception {
 ///   never the pictures.
 /// - `POST /v2/covers/missing`, `PUT /v2/covers/<name>` and
 ///   `GET /v2/covers/<name>` (sealed) move the cover pictures.
+/// - With [profiles]: `POST /v2/profiles` (sealed) lists the profiles and
+///   adds the ones the PC asks for, and `/v2/p/<id>/sync` and
+///   `/v2/p/<id>/covers/...` are the same requests for one profile. A profile
+///   with a PIN answers only while it is open (423 "locked").
 class SyncServer {
   SyncServer({
     required this.token,
     required this.handleSync,
     this.covers,
+    this.profiles,
     DateTime Function()? clock,
   }) : _now = clock ?? DateTime.now;
 
@@ -114,6 +146,7 @@ class SyncServer {
 
   final Future<String> Function(String body) handleSync;
   final SyncCovers? covers;
+  final SyncProfileHost? profiles;
   final DateTime Function() _now;
   HttpServer? _server;
   SyncKey? _key;
@@ -158,6 +191,7 @@ class SyncServer {
           'app': 'chapterly',
           'protocol': syncProtocolVersion,
           'sync': syncSealVersion,
+          if (profiles != null) 'profiles': syncProfilesVersion,
         });
       } else if (request.method == 'GET' && path == '/v2/hello') {
         _json(response, 200, {'challenge': _newChallenge()});
@@ -167,7 +201,9 @@ class SyncServer {
           'error': 'Update Chapterly on your PC to sync with this phone.',
         });
       } else if (path == '/v2/sync' ||
-          (path.startsWith('/v2/covers/') && covers != null)) {
+          (path.startsWith('/v2/covers/') && covers != null) ||
+          (profiles != null &&
+              (path == '/v2/profiles' || splitProfilePath(path) != null))) {
         await _serveSealed(request);
       } else {
         await _drain(request);
@@ -233,6 +269,9 @@ class SyncServer {
 
   /// The most plain content a sealed request to [path] may carry.
   int _limitFor(String method, String path) {
+    if (path == '/v2/profiles') return _maxProfilesBytes;
+    final split = splitProfilePath(path);
+    if (split != null) return _limitFor(method, split.path);
     if (path == '/v2/sync') return _maxBodyBytes;
     if (path == '/v2/covers/missing') return _maxHashListBytes;
     if (method == 'PUT') return _maxCoverBytes;
@@ -286,11 +325,29 @@ class SyncServer {
   Future<_Reply> _answer(String method, String path, List<int> plain) async {
     try {
       final body = utf8.decode(plain);
-      if (path == '/v2/sync') {
+      final profiles = this.profiles;
+      if (profiles != null && path == '/v2/profiles') {
         if (method != 'POST') return _error(404, 'Not found.');
-        return _Reply(200, await handleSync(body));
+        return _Reply(200, await profiles.profiles(body));
       }
-      return await _answerCovers(method, path, body);
+      final split = profiles == null ? null : splitProfilePath(path);
+      if (split != null) {
+        final SyncEndpoint? endpoint;
+        try {
+          endpoint = await profiles!.endpoint(split.id);
+        } on ProfileLocked {
+          return _error(423, 'locked');
+        }
+        if (endpoint == null) return _error(404, 'No such profile.');
+        return await _answerFor(
+          endpoint.handleSync,
+          endpoint,
+          method,
+          split.path,
+          body,
+        );
+      }
+      return await _answerFor(handleSync, covers, method, path, body);
     } on MissingCovers catch (error) {
       return _Reply(
         409,
@@ -306,8 +363,29 @@ class SyncServer {
     }
   }
 
-  Future<_Reply> _answerCovers(String method, String path, String body) async {
-    final covers = this.covers!;
+  Future<_Reply> _answerFor(
+    Future<String> Function(String body) handleSync,
+    SyncCovers? covers,
+    String method,
+    String path,
+    String body,
+  ) async {
+    if (path == '/v2/sync') {
+      if (method != 'POST') return _error(404, 'Not found.');
+      return _Reply(200, await handleSync(body));
+    }
+    if (covers == null || !path.startsWith('/v2/covers/')) {
+      return _error(404, 'Not found.');
+    }
+    return _answerCovers(covers, method, path, body);
+  }
+
+  Future<_Reply> _answerCovers(
+    SyncCovers covers,
+    String method,
+    String path,
+    String body,
+  ) async {
     if (method == 'POST' && path == '/v2/covers/missing') {
       final data = jsonDecode(body);
       final list = data is Map ? data['hashes'] : null;

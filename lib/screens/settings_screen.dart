@@ -1435,6 +1435,15 @@ class _SyncSettings extends StatelessWidget {
             title: const Text('Last sync'),
             subtitle: Text(_lastSyncText()),
           ),
+          const ListTile(
+            leading: Icon(Icons.people_outline),
+            title: Text('Every profile syncs'),
+            subtitle: Text(
+              'One pairing covers all your profiles. A profile missing on '
+              'one side is added there, matched by name. A profile with a '
+              'PIN syncs only while it is open on this phone.',
+            ),
+          ),
         ],
       ],
     );

@@ -21,6 +21,7 @@ import 'data/google_books_fill.dart';
 import 'data/hardcover_client.dart';
 import 'data/open_library_client.dart';
 import 'data/phone_sync.dart';
+import 'data/phone_sync_profiles.dart';
 import 'data/pin_lock.dart';
 import 'data/profile_files.dart';
 import 'data/profiles.dart';
@@ -76,6 +77,22 @@ Future<void> main() async {
     repository: repository,
     settings: settings,
     profileName: profiles.hasOthers ? profile.name : null,
+    // One pairing syncs every profile; the others are opened when the PC
+    // asks for them.
+    profiles: (openCore) => PhoneProfileHost(
+      store: profiles,
+      openCore: openCore,
+      open: (id) async {
+        final other = BookRepository(
+          await SqliteBookStore.open(fileName: profileDatabaseName(id)),
+        );
+        await other.load();
+        return (
+          repository: other,
+          settings: await AppSettings.load(profiles.scope(id)),
+        );
+      },
+    ),
   );
   await phoneSync.refresh();
   // Only listens for the PC while Chapterly is open on the screen.

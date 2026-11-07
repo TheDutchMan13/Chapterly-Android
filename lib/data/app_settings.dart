@@ -83,6 +83,9 @@ class AppSettings extends ChangeNotifier {
   bool _paperLight = false;
   bool _backupReminder = true;
   int _backupDays = 30;
+  /// Where the sync pairing is kept: for the whole device, not one
+  /// profile. Null in tests.
+  ScopedPrefs? _device;
   bool _syncEnabled = false;
   String? _syncCode;
   DateTime? _lastSyncAt;
@@ -353,8 +356,22 @@ class AppSettings extends ChangeNotifier {
     settings._paperLight = prefs.getBool('paperLight') ?? false;
     settings._backupReminder = prefs.getBool('backupReminder') ?? true;
     settings._backupDays = prefs.getInt('backupDays') ?? 30;
-    settings._syncEnabled = prefs.getBool('syncEnabled') ?? false;
-    settings._syncCode = prefs.getString('syncCode');
+    // One pairing for every profile, kept for the whole device. The first
+    // time, the first profile's pairing is used (or this one's).
+    final device = ScopedPrefs(prefs.prefs, deviceKeyStart);
+    final first = ScopedPrefs(prefs.prefs, '');
+    settings._device = device;
+    settings._syncCode = device.getString('syncCode') ??
+        first.getString('syncCode') ??
+        prefs.getString('syncCode');
+    settings._syncEnabled = device.getBool('syncEnabled') ??
+        ((first.getBool('syncEnabled') ?? false) ||
+            (prefs.getBool('syncEnabled') ?? false));
+    if (device.getBool('syncEnabled') == null) {
+      device.setBool('syncEnabled', settings._syncEnabled);
+      final code = settings._syncCode;
+      if (code != null) device.setString('syncCode', code);
+    }
     settings._lastSyncAt = _fromMillis(prefs.getInt('lastSync'));
     settings._lastSyncChanged = prefs.getInt('lastSyncChanged') ?? 0;
     settings._lastSyncError = prefs.getString('lastSyncError');
@@ -857,13 +874,13 @@ class AppSettings extends ChangeNotifier {
 
   void setSyncEnabled(bool value) {
     _syncEnabled = value;
-    prefs?.setBool('syncEnabled', value);
+    (_device ?? prefs)?.setBool('syncEnabled', value);
     notifyListeners();
   }
 
   void setSyncCode(String code) {
     _syncCode = code;
-    prefs?.setString('syncCode', code);
+    (_device ?? prefs)?.setString('syncCode', code);
     notifyListeners();
   }
 

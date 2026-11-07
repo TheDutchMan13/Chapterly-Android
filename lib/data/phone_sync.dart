@@ -13,7 +13,10 @@ class PhoneSync extends ChangeNotifier {
     required this.repository,
     required this.settings,
     this.profileName,
-  }) : _core = PhoneSyncCore(repository: repository, settings: settings);
+    SyncProfileHost Function(PhoneSyncCore openCore)? profiles,
+  }) : _core = PhoneSyncCore(repository: repository, settings: settings) {
+    this.profiles = profiles?.call(_core);
+  }
 
   final BookRepository repository;
   final AppSettings settings;
@@ -21,6 +24,9 @@ class PhoneSync extends ChangeNotifier {
   /// The open profile, told to the PC so it can say which one it reached.
   final String? profileName;
   final PhoneSyncCore _core;
+
+  /// Every profile on this phone, so one pairing syncs them all.
+  late final SyncProfileHost? profiles;
   SyncServer? _server;
   String? _error;
 
@@ -51,6 +57,7 @@ class PhoneSync extends ChangeNotifier {
       token: settings.syncCode!,
       handleSync: _core.handleSync,
       covers: _core,
+      profiles: profiles,
     );
     try {
       await server.start(port: port);
