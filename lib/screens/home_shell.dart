@@ -35,36 +35,47 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  /// Pages opened so far: the others are not built until first visited,
+  /// which makes starting quicker.
+  final _opened = <int>{0};
+
+  Widget _page(int index, Widget Function() make) =>
+      _opened.contains(index) ? make() : const SizedBox.shrink();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _index,
         children: [
-          LibraryScreen(
+          // Each page is made on first visit.
+          _page(0, () => LibraryScreen(
             repository: widget.repository,
             client: widget.client,
             settings: widget.settings,
             phoneSync: widget.phoneSync,
             fileIo: widget.fileIo,
-          ),
-          StatisticsScreen(
+          )),
+          _page(1, () => StatisticsScreen(
             repository: widget.repository,
             settings: widget.settings,
             fileIo: widget.fileIo,
-          ),
-          MoreScreen(
+          )),
+          _page(2, () => MoreScreen(
             repository: widget.repository,
             settings: widget.settings,
             phoneSync: widget.phoneSync,
             fileIo: widget.fileIo,
             client: widget.client,
-          ),
+          )),
         ],
       ),
       bottomNavigationBar: _bar(NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) => setState(() {
+          _index = i;
+          _opened.add(i);
+        }),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.menu_book_outlined),

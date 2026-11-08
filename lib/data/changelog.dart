@@ -13,6 +13,16 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.45.2',
+    date: '2026-11-07',
+    changes: [
+      'Quicker start and a quicker app while you use it: pages you have not '
+          'opened yet are not built until you open them, and pages hidden '
+          'behind the one you are on no longer redraw themselves every time '
+          'your library changes',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.45.1',
     date: '2026-11-07',
     changes: [

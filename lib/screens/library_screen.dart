@@ -35,6 +35,7 @@ import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'shelf_picker.dart';
 import 'new_books_banner.dart';
+import '../widgets/while_shown.dart';
 
 enum _AddChoice { search, scan, manual, bookFile, audioFile, audioFolder }
 
@@ -1276,7 +1277,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.settings, widget.repository]),
-      builder: (context, _) => DefaultTabController(
+      builder: (context, _) => WhileShown(build: (context) => DefaultTabController(
         key: ValueKey(_collections.length),
         length: Shelf.values.length + _collections.length,
         child: PopScope(
@@ -1480,7 +1481,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 : null,
           ),
         ),
-      ),
+      )),
     );
   }
 }
