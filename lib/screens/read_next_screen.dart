@@ -155,6 +155,22 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
     );
   }
 
+  /// What was worked out last, kept until the library or the books asked
+  /// about change: the screen is rebuilt often (even while another page is
+  /// shown) and working these out again each time was slow.
+  final _kept = <String, (String, Object?)>{};
+
+  T _keep<T>(String what, String key, T Function() work) {
+    final full = '${widget.repository.changeCount}|$key';
+    final known = _kept[what];
+    if (known != null && known.$1 == full) return known.$2 as T;
+    final value = work();
+    _kept[what] = (full, value);
+    return value;
+  }
+
+  static String _idsOf(List<Book> books) => [for (final b in books) b.id].join(',');
+
   /// More good places to start, from the books that match your filters,
   /// leaving out the one shown above.
   List<Widget> _picksSection(
@@ -162,10 +178,14 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
     List<Book> candidates,
     Book? shown,
   ) {
-    final picks = readNextPicks(widget.repository.books, [
-      for (final book in candidates)
-        if (book.id != shown?.id) book,
-    ]);
+    final picks = _keep(
+      'picks',
+      '${_idsOf(candidates)}|${shown?.id}',
+      () => readNextPicks(widget.repository.books, [
+        for (final book in candidates)
+          if (book.id != shown?.id) book,
+      ]),
+    );
     const titles = {
       ReadNextReason.nextInSeries: 'Next in a series you started',
       ReadNextReason.authorYouLike: 'By authors you like',
@@ -217,7 +237,11 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
           List<Recommendation> ranked = const [];
           Recommendation? recommendation;
           if (_bestMatch && candidates.isNotEmpty) {
-            ranked = recommend(widget.repository.books, candidates);
+            ranked = _keep(
+              'ranked',
+              _idsOf(candidates),
+              () => recommend(widget.repository.books, candidates),
+            );
             recommendation = ranked[_rank % ranked.length];
             current = recommendation.book;
           }
@@ -330,7 +354,11 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    if (predictRating(widget.repository.books, shown)
+                    if (_keep(
+                      'guess',
+                      shown.id,
+                      () => predictRating(widget.repository.books, shown),
+                    )
                         case final guess?)
                       Text(guess.describe(), textAlign: TextAlign.center),
                     Text(

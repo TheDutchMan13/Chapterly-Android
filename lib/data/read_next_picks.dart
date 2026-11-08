@@ -70,12 +70,29 @@ List<ReadNextPick> byAuthorsYouLike(
   Set<String> skip = const {},
 }) {
   final scored = <(Book, double, String)>[];
+  // Every book filed once under each of its authors, so an author's books
+  // are found without going through the whole library again (that took
+  // seconds with a big library).
+  final byAuthor = <String, List<Book>>{};
+  for (final book in all) {
+    if (book.deletedAt != null) continue;
+    final keys = {
+      authorKey(book.author),
+      for (final name in authorNames(book.author)) authorKey(name),
+    }..remove('');
+    for (final key in keys) {
+      (byAuthor[key] ??= []).add(book);
+    }
+  }
   final cache = <String, AuthorSummary>{};
   for (final book in waiting) {
     if (skip.contains(book.id) || book.author.trim().isEmpty) continue;
-    final name = authorNames(book.author).first;
-    final summary = cache[authorKey(name)] ??=
-        summarizeAuthor(booksByAuthor(all, name));
+    final names = authorNames(book.author);
+    if (names.isEmpty) continue;
+    final name = names.first;
+    final key = authorKey(name);
+    if (key.isEmpty) continue;
+    final summary = cache[key] ??= summarizeAuthor(byAuthor[key] ?? const []);
     if (summary.finished == 0) continue;
     final rating = summary.averageRating;
     final liked = rating == null ? summary.finished >= 2 : rating >= 4;

@@ -13,6 +13,18 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.45.1',
+    date: '2026-11-07',
+    changes: [
+      'Faster Read next page '
+          'with a big library: the Read next page worked out its "By authors '
+          'you like" list by going through the whole library again for each '
+          'author, and did it on every click, even while hidden. It now '
+          'takes a few milliseconds and is only worked out again when your '
+          'library changes',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.45.0',
     date: '2026-11-07',
     changes: [
