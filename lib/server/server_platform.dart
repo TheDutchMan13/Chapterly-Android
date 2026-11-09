@@ -7,3 +7,6 @@ const localEpubPositionKind = 'epub-cfi';
 
 /// Where the player finds a downloaded audio file at [path].
 String audioLocationFor(String path) => Uri.file(path).toString();
+
+/// How this device is named in the book server's list of devices.
+String serverDeviceName() => 'Android phone';
