@@ -27,6 +27,25 @@ class FileIo {
     );
   }
 
+  /// Lets [write] make a temporary file and opens the share sheet, for a
+  /// file too big to build in memory first (a backup with pictures).
+  Future<void> shareWrittenFile({
+    required String fileName,
+    required String mimeType,
+    required Future<void> Function(File file) write,
+    String? subject,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await write(file);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: mimeType)],
+        subject: subject,
+      ),
+    );
+  }
+
   /// Writes PNG [bytes] to a temporary file and opens the share sheet.
   Future<void> shareImage({
     required String fileName,

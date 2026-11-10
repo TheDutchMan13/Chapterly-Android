@@ -69,9 +69,10 @@ Future<void> main() async {
   } catch (_) {
     // The app's own backups folder is used.
   }
-  final repository = BookRepository(
-    await SqliteBookStore.open(fileName: profileDatabaseName(profile.id)),
+  final store = await SqliteBookStore.open(
+    fileName: profileDatabaseName(profile.id),
   );
+  final repository = BookRepository(store);
   await repository.load();
   // Cover pictures are read from this library when they are shown.
   CoverImages.source = repository.readCover;
@@ -109,6 +110,8 @@ Future<void> main() async {
   );
   // Not awaited: the app opens while the backup is written.
   runAutoBackup(repository, settings);
+  // Gives back the empty space in the library file, once the app is open.
+  unawaited(Future<void>.delayed(const Duration(seconds: 20), store.compact));
   // Fills in series found in titles, now and as books are added.
   AutoSeries.start(repository, settings);
   // Google Books fills in missing covers, pages and tags (off until switched on).
