@@ -15,6 +15,7 @@ import '../models/shelf.dart';
 import '../widgets/book_cover.dart';
 import 'book_insights.dart';
 import 'book_detail_screen.dart';
+import 'tag_picker.dart';
 
 /// Picks a book from the For later shelf, so you do not have to: the best
 /// match for your taste, or a random one.
@@ -227,8 +228,13 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
         listenable: widget.repository,
         builder: (context, _) {
           final waiting = widget.repository.booksOn(Shelf.forLater);
-          final tags = ({for (final book in waiting) ...book.tags}.toList()
-            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())));
+          final tagCounts = <String, int>{};
+          for (final book in waiting) {
+            for (final tag in book.tags) {
+              tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+            }
+          }
+          final tags = chipTags(tagCounts, _tags);
           final candidates = _candidates();
           Book? current;
           for (final book in candidates) {
@@ -299,6 +305,22 @@ class _ReadNextScreenState extends State<ReadNextScreen> {
                           () => on
                               ? _formats.add(format)
                               : _formats.remove(format),
+                        ),
+                      ),
+                    if (tagCounts.length > visibleTagCount)
+                      allTagsChip(
+                        total: tagCounts.length,
+                        onPressed: () => showTagPicker(
+                          context,
+                          counts: tagCounts,
+                          choiceOf: (tag) => _tags.contains(tag)
+                              ? TagChoice.included
+                              : TagChoice.none,
+                          onTap: (tag) => setState(
+                            () => _tags.contains(tag)
+                                ? _tags.remove(tag)
+                                : _tags.add(tag),
+                          ),
                         ),
                       ),
                     for (final tag in tags)
