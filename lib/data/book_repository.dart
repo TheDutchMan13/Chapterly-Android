@@ -738,6 +738,20 @@ class BookRepository extends ChangeNotifier implements CoverStore {
     );
   }
 
+  /// Sets the title and author of many books at once (Fix library). A book
+  /// whose new title is empty keeps its old one, and an empty author is
+  /// ignored the same way, so a cleanup can never blank a book.
+  Future<void> setTitlesAndAuthors(Map<String, (String, String)> choices) {
+    if (choices.isEmpty) return Future.value();
+    return _updateMany(choices.keys.toSet(), (book) {
+      final (title, author) = choices[book.id]!;
+      return book.copyWith(
+        title: title.trim().isEmpty ? book.title : title.trim(),
+        author: author.trim().isEmpty ? book.author : author.trim(),
+      );
+    });
+  }
+
   /// Sets the cover of each book: book id to the cover address.
   Future<void> setCoversFor(Map<String, String> covers) {
     if (covers.isEmpty) return Future.value();
