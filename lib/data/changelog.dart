@@ -13,6 +13,20 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.50.0',
+    date: '2026-11-12',
+    changes: [
+      'On a tablet, or a phone turned on its side, the Library, Statistics '
+          'and More pages switch from a rail down the left, like Chapterly '
+          'for Windows. It leaves the books the full height of the screen, '
+          'and turning the phone keeps your place and filters',
+      'Empty pages now explain themselves: an icon, what is missing and '
+          'what to do about it (the Library shelves and the wish list)',
+      'The shelf tabs line up with the edge instead of floating in from the '
+          'left',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.49.0',
     date: '2026-11-10',
     changes: [

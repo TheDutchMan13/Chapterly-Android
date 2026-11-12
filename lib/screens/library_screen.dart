@@ -21,6 +21,7 @@ import '../models/book_format.dart';
 import '../models/shelf.dart';
 import '../models/wish_priority.dart';
 import '../widgets/book_cover.dart';
+import '../widgets/empty_state.dart';
 import 'add_book_dialog.dart';
 import 'add_file_flow.dart';
 import 'book_detail_screen.dart';
@@ -1313,6 +1314,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             appBar: _buildAppBar(
               TabBar(
                 isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
                   for (final shelf in widget.settings.shelfOrder)
                     Tab(
@@ -1599,16 +1601,14 @@ class _ShelfList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (books.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            filtering
-                ? 'No books on this shelf match your search or filters.'
-                : 'No books on this shelf yet.',
-            textAlign: TextAlign.center,
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.auto_stories_outlined,
+        title: filtering
+            ? 'No books on this shelf match your search or filters.'
+            : 'No books on this shelf yet.',
+        hint: filtering
+            ? 'Clear the filters or the search to see everything here.'
+            : 'Add one with the + button.',
       );
     }
 
