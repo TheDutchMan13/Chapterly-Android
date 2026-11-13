@@ -13,6 +13,13 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.51.0',
+    date: '2026-11-12',
+    changes: [
+      'Changing a setting that does not change how Chapterly looks (such as the cover size) no longer rebuilds the whole app',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.50.0',
     date: '2026-11-12',
     changes: [

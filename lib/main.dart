@@ -41,6 +41,7 @@ import 'server/server_downloads.dart';
 import 'server/server_state.dart';
 import 'server/server_sync.dart';
 import 'data/cover_store.dart';
+import 'widgets/theme_changes.dart';
 
 /// The profile Chapterly opened with. Its files are in [profileFolder].
 String _profileId = mainProfileId;
@@ -158,9 +159,9 @@ class ChapterlyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: settings,
-      builder: (context, _) => MaterialApp(
+    return ThemeChanges(
+      settings: settings,
+      builder: (context) => MaterialApp(
         title: 'Chapterly',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(settings, Brightness.light),
