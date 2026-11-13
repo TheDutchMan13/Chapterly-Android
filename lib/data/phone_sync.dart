@@ -44,7 +44,19 @@ class PhoneSync extends ChangeNotifier {
 
   int get port => portOverride;
 
-  Future<void> refresh() async {
+  /// Starts and stops wait for the one before, so two that overlap (the
+  /// app coming back on the screen while sync is still starting) can't both
+  /// try to open the port.
+  Future<void> _queue = Future.value();
+
+  Future<void> refresh() {
+    final next = _queue.then((_) => _refresh());
+    // A failed start must not stop later ones.
+    _queue = next.catchError((Object _) {});
+    return next;
+  }
+
+  Future<void> _refresh() async {
     if (!settings.syncEnabled || _paused) {
       await _stop();
       notifyListeners();

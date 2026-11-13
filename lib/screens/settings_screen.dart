@@ -14,6 +14,7 @@ import '../data/file_io.dart';
 import '../data/goodreads_export.dart';
 import '../data/kindle_clippings.dart';
 import '../data/phone_sync.dart';
+import '../data/perf_log.dart';
 import '../data/profiles.dart';
 import '../data/sync_server.dart';
 import '../data/theme_options.dart';
@@ -1121,6 +1122,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.rocket_launch_outlined),
             title: Text('Version'),
             subtitle: Text(appVersion),
+          ),
+          ListTile(
+            leading: const Icon(Icons.speed_outlined),
+            title: const Text('Share performance log'),
+            subtitle: const Text(
+              'How long starting took and any slow moments since Chapterly '
+              'opened. No book details are in it.',
+            ),
+            onTap: () => widget.fileIo.shareWrittenFile(
+              fileName: 'chapterly-performance-log.txt',
+              mimeType: 'text/plain',
+              subject: 'Chapterly performance log',
+              write: (file) => file.writeAsString(PerfLog.text()),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),

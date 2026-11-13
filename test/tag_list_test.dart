@@ -150,14 +150,18 @@ void main() {
     expect(find.text('All tags (41)'), findsOneWidget);
     await _scrollBarTo(tester, find.text('common'));
     expect(find.text('common'), findsOneWidget);
-    expect(find.text('tag40', skipOffstage: false), findsNothing);
+    // No chip for a little-used tag (a book's own tag line may show it).
+    expect(
+      find.widgetWithText(FilterChip, 'tag40', skipOffstage: false),
+      findsNothing,
+    );
     await _scrollBarTo(tester, find.text('All tags (41)'));
     await tester.tap(find.text('All tags (41)'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'tag40');
     await tester.pump();
     expect(find.text('1 books'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ListTile, 'tag40'));
+    await tester.tap(find.widgetWithText(ListTile, 'tag40').last);
     await tester.pump();
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
@@ -179,9 +183,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'skip');
     await tester.pump();
-    await tester.tap(find.widgetWithText(ListTile, 'skip'));
+    await tester.tap(find.widgetWithText(ListTile, 'skip').last);
     await tester.pump();
-    await tester.tap(find.widgetWithText(ListTile, 'skip'));
+    await tester.tap(find.widgetWithText(ListTile, 'skip').last);
     await tester.pump();
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
@@ -226,7 +230,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'tag30');
     await tester.pump();
-    await tester.tap(find.widgetWithText(ListTile, 'tag30'));
+    await tester.tap(find.widgetWithText(ListTile, 'tag30').last);
     await tester.pump();
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();

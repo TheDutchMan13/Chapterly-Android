@@ -45,12 +45,17 @@ class BookDetailScreen extends StatelessWidget {
     required this.settings,
     required this.fileIo,
     required this.bookId,
+    this.onClose,
   });
 
   final BookRepository repository;
   final AppSettings settings;
   final FileIo fileIo;
   final String bookId;
+
+  /// Closes the book when it is shown beside the list (on a tablet) rather
+  /// than as a page of its own.
+  final VoidCallback? onClose;
 
   /// Shows a dialog with one text field. Returns the text, or null if cancelled.
   Future<String?> _askText(
@@ -493,7 +498,12 @@ class BookDetailScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     await repository.moveToTrash(book.id);
-    navigator.pop();
+    final close = onClose;
+    if (close != null) {
+      close();
+    } else {
+      navigator.pop();
+    }
     messenger.showSnackBar(
       SnackBar(
         content: Text('"${book.title}" moved to the trash'),
@@ -859,6 +869,13 @@ class BookDetailScreen extends StatelessWidget {
         final band = Theme.of(context).colorScheme.primaryContainer;
         return Scaffold(
           appBar: AppBar(
+            leading: onClose == null
+                ? null
+                : IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose,
+                  ),
             title: const Text('Book'),
             backgroundColor: midnight ? band : null,
             actions: [

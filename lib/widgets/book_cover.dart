@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/cover_store.dart';
 import '../data/sync_covers.dart';
+import '../data/web_cover_cache.dart';
 
 /// Decoded data: covers, kept so a long list does not decode the same
 /// picture again on every frame. Reusing the same bytes also lets Flutter's
@@ -147,6 +148,18 @@ class BookCover extends StatelessWidget {
     } else if (url != null && url.startsWith('data:')) {
       final bytes = _dataCoverBytes(url);
       if (bytes != null) picture = fromBytes(bytes);
+    } else if (url != null && WebCoverCache.folder != null) {
+      // A cover from the web, kept on the phone so it shows offline.
+      final known = WebCoverCache.cached(url);
+      picture = known != null
+          ? fromBytes(known)
+          : FutureBuilder<Uint8List?>(
+              future: WebCoverCache.load(url),
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                return bytes == null ? placeholder : fromBytes(bytes);
+              },
+            );
     } else if (url != null) {
       picture = Image.network(
         url,

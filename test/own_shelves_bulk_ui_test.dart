@@ -24,7 +24,8 @@ Book _book(String id, String title, List<String> shelves) => Book(
     );
 
 Future<BookRepository> _open(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1600, 2400);
+  // Narrower than a tablet, so the book opens as a page of its own.
+  tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final repository = BookRepository(InMemoryBookStore());
@@ -60,6 +61,9 @@ void main() {
       (tester) async {
     final repository = await _open(tester);
 
+    // The shelf tabs scroll sideways; bring it into view first.
+    await tester.ensureVisible(find.textContaining('Beach ('));
+    await tester.pump();
     await tester.tap(find.textContaining('Beach ('));
     await _settle(tester);
     await tester.longPress(find.text('Alpha').first);
@@ -86,6 +90,9 @@ void main() {
   testWidgets('moving books to another of your shelves', (tester) async {
     final repository = await _open(tester);
 
+    // The shelf tabs scroll sideways; bring it into view first.
+    await tester.ensureVisible(find.textContaining('Beach ('));
+    await tester.pump();
     await tester.tap(find.textContaining('Beach ('));
     await _settle(tester);
     await tester.longPress(find.text('Alpha').first);

@@ -13,6 +13,31 @@ class ChangelogEntry {
 
 const changelog = [
   ChangelogEntry(
+    version: '1.52.0',
+    date: '2026-11-12',
+    changes: [
+      'On a tablet the book you open shows beside the list, like Chapterly '
+          'for Windows. Back or the close button puts the list back on its '
+          'own, and turning the tablet keeps your shelf and filters',
+      'More books fit on a phone turned on its side: the filter chips are '
+          'tucked behind a filters button (a dot shows when one is on), the '
+          'title bar is slimmer, and the reading card, goal and notes stay '
+          'on their own pages there',
+      'Long lists of tags stay on one line under a book, so more books fit '
+          'on the screen, and the end of the list leaves room so the add '
+          'button never covers the last book',
+      'Covers that come from a web address are now kept on the phone once '
+          'they have been shown, so they appear without a connection and are '
+          'not downloaded again each time',
+      'Chapterly shows your books a little sooner: Wi-Fi sync and the '
+          'audiobook notification now start just after the first screen is '
+          'drawn',
+      'Settings, About, Share performance log: how long starting took and '
+          'any slow moments, to send if Chapterly feels slow. No book details '
+          'are in it',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.51.0',
     date: '2026-11-12',
     changes: [

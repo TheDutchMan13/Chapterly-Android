@@ -398,6 +398,23 @@ void main() {
   });
 
   group('the sync switch', () {
+    test('two starts at once (the app coming back while sync starts) leave '
+        'sync running', () async {
+      final repository = BookRepository(InMemoryBookStore());
+      await repository.load();
+      final settings = AppSettings()..setSyncEnabled(true);
+      // A fixed free port, so the two starts would fight over it.
+      final probe = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+      final port = probe.port;
+      await probe.close();
+      final sync = PhoneSync(repository: repository, settings: settings)
+        ..portOverride = port;
+      await Future.wait([sync.refresh(), sync.appResumed(), sync.refresh()]);
+      expect(sync.running, isTrue);
+      expect(sync.error, isNull);
+      sync.dispose();
+    });
+
     test('a stop while the port is opening leaves nothing listening',
         () async {
       final repository = BookRepository(InMemoryBookStore());

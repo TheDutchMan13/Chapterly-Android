@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'audio/android_audio_files.dart';
 import 'audio/audio_bookmarks.dart';
@@ -20,6 +21,7 @@ import 'data/google_books_client.dart';
 import 'data/google_books_fill.dart';
 import 'data/hardcover_client.dart';
 import 'data/open_library_client.dart';
+import 'data/perf_log.dart';
 import 'data/phone_sync.dart';
 import 'data/phone_sync_profiles.dart';
 import 'data/pin_lock.dart';
@@ -41,6 +43,7 @@ import 'server/server_downloads.dart';
 import 'server/server_state.dart';
 import 'server/server_sync.dart';
 import 'data/cover_store.dart';
+import 'data/web_cover_cache.dart';
 import 'widgets/theme_changes.dart';
 
 /// The profile Chapterly opened with. Its files are in [profileFolder].
@@ -48,12 +51,23 @@ String _profileId = mainProfileId;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PerfLog.mark('Chapterly starts');
   // Before any PIN is asked for, so waits for wrong PINs hold even if the
   // clock is changed.
   await PinGuard.readDeviceUptime();
   // The open profile. Choosing another one restarts Chapterly with it.
   final profiles = await ProfileStore.load();
   final profile = profiles.active;
+  PerfLog.mark('profiles loaded');
+  try {
+    final support = await getApplicationSupportDirectory();
+    PerfLog.attach(File('${support.path}/performance_log.txt'));
+    // Covers from a web address are kept here once fetched, so they show
+    // without a connection.
+    WebCoverCache.folder = Directory('${support.path}/web_covers');
+  } catch (_) {
+    // No log, and web covers are fetched each time, as before.
+  }
   _profileId = profile.id;
   ProfileSwitching.store = profiles;
   ProfileSwitching.switchRestarts = true;
@@ -73,11 +87,14 @@ Future<void> main() async {
   final store = await SqliteBookStore.open(
     fileName: profileDatabaseName(profile.id),
   );
+  PerfLog.mark('database opened');
   final repository = BookRepository(store);
   await repository.load();
+  PerfLog.mark('library loaded (${repository.books.length} books)');
   // Cover pictures are read from this library when they are shown.
   CoverImages.source = repository.readCover;
   final settings = await AppSettings.load(profiles.scope(profile.id));
+  PerfLog.mark('settings loaded');
   final phoneSync = PhoneSync(
     repository: repository,
     settings: settings,
@@ -99,7 +116,8 @@ Future<void> main() async {
       },
     ),
   );
-  await phoneSync.refresh();
+  // Wi-Fi sync is started once the first screen is drawn (see
+  // _afterFirstScreen): opening its port is not needed to see the books.
   // Only listens for the PC while Chapterly is open on the screen.
   // The listener stays registered with the app for as long as it runs.
   AppLifecycleListener(
@@ -122,14 +140,19 @@ Future<void> main() async {
   // Audiobook bookmarks live with the books, so they sync with the PC.
   AudioBookmarking.repository = repository;
   await _setUpListening(repository, settings);
+  PerfLog.mark('audiobooks ready');
   await _setUpReading(repository);
+  PerfLog.mark('ebook library loaded');
   await _setUpBookServer(repository, settings);
+  PerfLog.mark('book server set up');
   // The home-screen widget and the daily reading reminder.
   unawaited(HomeBridge(
     repository: repository,
     settings: settings,
     controller: Listening.controller,
   ).start());
+  PerfLog.mark('opening the first screen');
+  PerfLog.watch();
   runApp(
     ChapterlyApp(
       repository: repository,
@@ -139,6 +162,12 @@ Future<void> main() async {
       fileIo: const FileIo(),
     ),
   );
+  // Registered once the app is attached, so this is the frame with the
+  // books on it.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    PerfLog.mark('first screen drawn');
+    unawaited(_afterFirstScreen(phoneSync, settings));
+  });
 }
 
 class ChapterlyApp extends StatelessWidget {
@@ -345,6 +374,26 @@ Future<void> _setUpListening(
     settings.addListener(() => controller.smartRewind = settings.smartRewind);
     Listening.controller = controller;
     Listening.files = files;
+  } catch (_) {
+    // No audiobooks this time.
+  }
+}
+
+/// What the first screen does not need, done just after it is drawn so the
+/// books show sooner: starting Wi-Fi sync (opening its port) and the
+/// audiobook notification. Until then the player still works in the app.
+Future<void> _afterFirstScreen(PhoneSync phoneSync, AppSettings settings) async {
+  await PerfLog.timed('Wi-Fi sync started', phoneSync.refresh);
+  await PerfLog.timed(
+    'audiobook notification set up',
+    () => _startAudioService(settings),
+  );
+}
+
+Future<void> _startAudioService(AppSettings settings) async {
+  final controller = Listening.controller;
+  if (controller == null) return;
+  try {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
     await AudioService.init(

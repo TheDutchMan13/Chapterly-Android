@@ -67,6 +67,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final Set<String> _selected = {};
   final _searchController = TextEditingController();
   bool _searching = false;
+
+  /// On a short screen (a phone on its side) the filter chips are tucked
+  /// away until asked for, so the books get the room.
+  bool _filtersShown = false;
+
+  static bool _isShort(BuildContext context) =>
+      MediaQuery.sizeOf(context).height < 500;
+
+  bool get _chipFiltering =>
+      _selectedTags.isNotEmpty ||
+      _excludedTags.isNotEmpty ||
+      _finishYear != null ||
+      _formats.isNotEmpty ||
+      _favoritesOnly;
   bool _favoritesOnly = false;
   int _quoteSkip = 0;
   final Set<String> _excludedTags = {};
@@ -900,6 +914,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
 
   void _openBook(Book book) {
+    if (_wide) {
+      setState(() => _currentId = book.id);
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => BookDetailScreen(
@@ -1220,9 +1238,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
         bottom: tabBar,
       );
     }
+    final short = _isShort(context);
     return AppBar(
       title: const Text('Library'),
+      toolbarHeight: short ? 48 : null,
       actions: [
+        if (short)
+          IconButton(
+            tooltip: _filtersShown ? 'Hide filters' : 'Show filters',
+            isSelected: _filtersShown,
+            // A dot when filters are on but tucked away.
+            icon: Badge(
+              isLabelVisible: _chipFiltering && !_filtersShown,
+              smallSize: 8,
+              child: const Icon(Icons.tune),
+            ),
+            onPressed: () => setState(() => _filtersShown = !_filtersShown),
+          ),
         IconButton(
           tooltip: 'Search',
           icon: const Icon(Icons.search),
@@ -1292,8 +1324,69 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return _opening = index;
   }
 
+  /// From this width (a tablet) the open book shows beside the list, as in
+  /// Chapterly for Windows, instead of on a page of its own.
+  static const _twoPaneWidth = 900.0;
+
+  /// Whether the open book is shown beside the list now.
+  bool _wide = false;
+
+  /// The book open beside the list.
+  String? _currentId;
+
+  /// Keeps the list (its shelf, scroll place and filters) when the screen
+  /// is turned and the book pane comes or goes.
+  final _libraryKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        _wide = width >= _twoPaneWidth;
+        final library = KeyedSubtree(key: _libraryKey, child: _library(context));
+        if (!_wide) return library;
+        final listWidth = (width * 0.42).clamp(360.0, 520.0);
+        return Row(
+          children: [
+            SizedBox(width: listWidth, child: library),
+            const VerticalDivider(width: 1),
+            Expanded(child: _detailPane()),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The open book beside the list, or a hint when none is open. It has its
+  /// own messenger, so its messages (such as Undo) show there.
+  Widget _detailPane() {
+    final id = _currentId;
+    final book = id == null ? null : widget.repository.byId(id);
+    if (book != null && book.deletedAt == null) {
+      return ScaffoldMessenger(
+        child: BookDetailScreen(
+          key: ValueKey(book.id),
+          repository: widget.repository,
+          settings: widget.settings,
+          fileIo: widget.fileIo,
+          bookId: book.id,
+          onClose: () => setState(() => _currentId = null),
+        ),
+      );
+    }
+    return const ScaffoldMessenger(
+      child: Scaffold(
+        body: EmptyState(
+          icon: Icons.menu_book_outlined,
+          title: 'Pick a book to see it here.',
+          hint: 'Its details, notes and reading progress show beside the list.',
+        ),
+      ),
+    );
+  }
+
+  Widget _library(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.settings, widget.repository]),
       builder: (context, _) => WhileShown(build: (context) => DefaultTabController(
@@ -1301,13 +1394,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
         initialIndex: _openingShelf(),
         length: Shelf.values.length + _collections.length,
         child: PopScope(
-          canPop: _selected.isEmpty && !_searching,
+          canPop: _selected.isEmpty &&
+              !_searching &&
+              !(_wide && _currentId != null),
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) return;
             if (_selected.isNotEmpty) {
               setState(_selected.clear);
-            } else {
+            } else if (_searching) {
               _stopSearching();
+            } else {
+              // Back closes the book open beside the list.
+              setState(() => _currentId = null);
             }
           },
           child: Scaffold(
@@ -1368,6 +1466,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     if (!_searching && _selected.isEmpty)
                       NewServerBooksBanner(settings: widget.settings),
                     ?(widget.settings.continueCard &&
+                            !_isShort(context) &&
                             !_searching &&
                             _selected.isEmpty
                         ? ContinueReadingCard.forLibrary(
@@ -1375,9 +1474,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             onOpen: _openBook,
                           )
                         : null),
-                    ?_goalStrip(),
-                    // One note at a time, so the books keep the screen.
-                    ?(_stalledBanner() ?? _quoteCard()),
+                    // On a short screen the books need the room: the goal,
+                    // notes and the reading card are on other pages too.
+                    if (!_isShort(context)) ...[
+                      ?_goalStrip(),
+                      // One note at a time, so the books keep the screen.
+                      ?(_stalledBanner() ?? _quoteCard()),
+                    ],
+                    if (!_isShort(context) || _filtersShown)
                     _FilterBar(
                       chips: [
                         _savedFiltersChip(),
@@ -1619,7 +1723,8 @@ class _ShelfList extends StatelessWidget {
       final coverWidth = 110 * coverScale;
       final coverHeight = 160 * coverScale;
       return GridView.builder(
-        padding: const EdgeInsets.all(12),
+        // Room at the end so the add button never covers the last books.
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: coverWidth + 20,
           mainAxisExtent: coverHeight + 74,
@@ -1707,6 +1812,8 @@ class _ShelfList extends StatelessWidget {
     }
 
     return ListView.builder(
+      // Room at the end so the add button never covers the last books.
+      padding: const EdgeInsets.only(bottom: 88),
       itemCount: books.length,
       itemBuilder: (context, index) {
         final book = books[index];
@@ -1719,7 +1826,17 @@ class _ShelfList extends StatelessWidget {
             title: book.title,
           ),
           title: Text(book.title),
-          subtitle: lines.isEmpty ? null : Text(lines.join('\n')),
+          // One line each: a long list of tags used to take up to four.
+          subtitle: lines.isEmpty
+              ? null
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final line in lines)
+                      Text(line, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
           isThreeLine: lines.length > 1,
           onTap: () => onOpen(book),
           onLongPress: () => onSelect(book),
