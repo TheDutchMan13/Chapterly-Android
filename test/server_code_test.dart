@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('accepts a valid code', () {
-    final code = parseServerCode('chapterly-server:1|100.72.125.106:8780|aB3_-.~x');
+    final code = parseServerCode('chapterly-server:1|100.101.102.103:8780|aB3_-.~x');
     expect(code, isNotNull);
-    expect(code!.address, '100.72.125.106:8780');
+    expect(code!.address, '100.101.102.103:8780');
     expect(code.token, 'aB3_-.~x');
   });
 
